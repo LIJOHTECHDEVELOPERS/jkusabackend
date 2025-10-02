@@ -11,7 +11,7 @@ from typing import Optional
 import logging
 
 # FIXED: Import get_current_admin from the correct location
-from app.auth.auth import get_current_admin
+from app.utils.auth import get_current_admin
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -64,7 +64,7 @@ async def create_activity(
         if featured_image.size > 5 * 1024 * 1024:
             logger.error(f"Image too large: {featured_image.size} bytes")
             raise HTTPException(status_code=400, detail="Image must be less than 5MB")
-        featured_image_url = await s3_service.upload_image(featured_image)
+        featured_image_url = s3_service.upload_image(featured_image)
         if not featured_image_url:
             logger.error("Failed to upload image to S3")
             raise HTTPException(status_code=500, detail="Failed to upload image")
@@ -267,9 +267,9 @@ async def update_activity(
         
         if db_activity.featured_image_url:
             logger.debug(f"Deleting old image: {db_activity.featured_image_url}")
-            await s3_service.delete_image(db_activity.featured_image_url)
+            s3_service.delete_image(db_activity.featured_image_url)
         
-        new_image_url = await s3_service.upload_image(featured_image)
+        new_image_url = s3_service.upload_image(featured_image)
         if not new_image_url:
             logger.error("Failed to upload image to S3")
             raise HTTPException(status_code=500, detail="Failed to upload image")
@@ -281,7 +281,7 @@ async def update_activity(
         
     elif remove_image == "true" and db_activity.featured_image_url:
         logger.debug(f"Removing existing image: {db_activity.featured_image_url}")
-        await s3_service.delete_image(db_activity.featured_image_url)
+        s3_service.delete_image(db_activity.featured_image_url)
         db_activity.featured_image_url = None
         updated = True
         changes_made.append("removed_image")
@@ -322,7 +322,7 @@ async def delete_activity(
     
     if db_activity.featured_image_url:
         logger.debug(f"Deleting image: {db_activity.featured_image_url}")
-        await s3_service.delete_image(db_activity.featured_image_url)
+        s3_service.delete_image(db_activity.featured_image_url)
     
     db.delete(db_activity)
     db.commit()
