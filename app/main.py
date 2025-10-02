@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import user_auth, admin_auth, admin_announcement, admin_leadership, admin_event, admin_news
 # --- NEW IMPORTS FOR ACTIVITIES ---
-from app.routers import admin_activity # Import the module containing the admin router
+from app.routers import admin_activity # Import the module
 from app.routers.admin_activity import public_activity_router # Import the public router
 # -----------------------------------
 from app.routers.admin_announcement import public_router as public_announcement_router

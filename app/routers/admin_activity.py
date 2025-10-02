@@ -1,25 +1,17 @@
-# app/routers/admin_activity.py
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from jose import JWTError, jwt
 from app.database import get_db
-
-# Use aliases to prevent name collision between SQLAlchemy model and Pydantic schema
 from app.models.activity import Activity as ActivityModel
-from app.schemas.activity import Activity as ActivitySchema, ActivityCreate, ActivityUpdate
-
+from app.schemas.activity import Activity, ActivityCreate, ActivityUpdate
 from app.models.admin import Admin
 from app.services.s3_service import s3_service
 from datetime import datetime
 from typing import Optional
 import logging
 import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -30,14 +22,12 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 admin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="admin/auth/login")
 
-# Admin router for authenticated endpoints
+# Routers
 router = APIRouter(prefix="/admin/activities", tags=["admin_activities"])
-
-# Public router for unauthenticated access
 public_activity_router = APIRouter(prefix="/activities", tags=["public_activities"])
 
 def get_current_admin(token: str = Depends(admin_oauth2_scheme), db: Session = Depends(get_db)):
-    """Validates the JWT token and returns the current admin user."""
+    """Validates JWT token and returns the current admin user."""
     logger.debug(f"Validating token: {token[:10]}...")
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -62,18 +52,18 @@ def get_current_admin(token: str = Depends(admin_oauth2_scheme), db: Session = D
         logger.error(f"JWT decode error: {e}")
         raise credentials_exception
 
-@router.post("/", response_model=ActivitySchema)
-def create_activity(
+@router.post("/", response_model=Activity)
+async def create_activity(
     title: str = Form(...),
     description: str = Form(...),
-    start_datetime: str = Form(...),  # Accept ISO string
+    start_datetime: str = Form(...),
     end_datetime: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
     featured_image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Create a new activity with optional featured image"""
+    """Create a new activity with optional featured image."""
     logger.debug(f"Creating activity by user: {current_user.id}")
     
     # Parse start_datetime
@@ -105,7 +95,7 @@ def create_activity(
         if featured_image.size > 5 * 1024 * 1024:
             logger.error(f"Image too large: {featured_image.size} bytes")
             raise HTTPException(status_code=400, detail="Image must be less than 5MB")
-        featured_image_url = s3_service.upload_image(featured_image)
+        featured_image_url = await s3_service.upload_image(featured_image)
         if not featured_image_url:
             logger.error("Failed to upload image to S3")
             raise HTTPException(status_code=500, detail="Failed to upload image")
@@ -134,34 +124,34 @@ def create_activity(
     
     return db_activity
 
-@router.get("/", response_model=list[ActivitySchema])
-def read_activities_list(
+@router.get("/", response_model=list[Activity])
+async def read_activities_list(
     skip: int = 0,
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Get list of activities (admin only)"""
+    """Get list of activities (admin only)."""
     logger.debug(f"Fetching activities list: skip={skip}, limit={limit}")
     return db.query(ActivityModel).offset(skip).limit(limit).all()
 
-@public_activity_router.get("/", response_model=list[ActivitySchema])
-def read_public_activities_list(
+@public_activity_router.get("/", response_model=list[Activity])
+async def read_public_activities_list(
     skip: int = 0,
     limit: int = 10,
     db: Session = Depends(get_db)
 ):
-    """Get list of activities (public access), ordered by start_datetime ascending"""
+    """Get list of activities (public access), ordered by start_datetime ascending."""
     logger.debug(f"Fetching public activities list: skip={skip}, limit={limit}")
     return db.query(ActivityModel).order_by(ActivityModel.start_datetime.asc()).offset(skip).limit(limit).all()
 
-@router.get("/{activity_id}", response_model=ActivitySchema)
-def read_activity(
+@router.get("/{activity_id}", response_model=Activity)
+async def read_activity(
     activity_id: int,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Get a specific activity (admin only)"""
+    """Get a specific activity (admin only)."""
     logger.debug(f"Fetching activity ID: {activity_id}")
     db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
     if db_activity is None:
@@ -169,12 +159,12 @@ def read_activity(
         raise HTTPException(status_code=404, detail="Activity not found")
     return db_activity
 
-@public_activity_router.get("/{activity_id}", response_model=ActivitySchema)
-def read_public_activity(
+@public_activity_router.get("/{activity_id}", response_model=Activity)
+async def read_public_activity(
     activity_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get a specific activity (public access)"""
+    """Get a specific activity (public access)."""
     logger.debug(f"Fetching public activity ID: {activity_id}")
     db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
     if db_activity is None:
@@ -182,8 +172,8 @@ def read_public_activity(
         raise HTTPException(status_code=404, detail="Activity not found")
     return db_activity
 
-@router.put("/{activity_id}", response_model=ActivitySchema)
-def update_activity(
+@router.put("/{activity_id}", response_model=Activity)
+async def update_activity(
     activity_id: int,
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
@@ -195,16 +185,11 @@ def update_activity(
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Update an activity"""
+    """Update an activity."""
     logger.debug(f"Updating activity ID: {activity_id} by user: {current_user.id}")
-    logger.debug(f"Received parameters:")
-    logger.debug(f"  - title: {title}")
-    logger.debug(f"  - description: {description[:50] + '...' if description and len(description) > 50 else description}")
-    logger.debug(f"  - start_datetime: {start_datetime}")
-    logger.debug(f"  - end_datetime: {end_datetime}")
-    logger.debug(f"  - location: {location}")
-    logger.debug(f"  - featured_image: {featured_image.filename if featured_image else None}")
-    logger.debug(f"  - remove_image: {remove_image}")
+    logger.debug(f"Received parameters: title={title}, description={description[:50] + '...' if description and len(description) > 50 else description}, "
+                 f"start_datetime={start_datetime}, end_datetime={end_datetime}, location={location}, "
+                 f"featured_image={featured_image.filename if featured_image else None}, remove_image={remove_image}")
 
     # Fetch the existing activity
     db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
@@ -212,54 +197,50 @@ def update_activity(
         logger.warning(f"Activity ID {activity_id} not found")
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    # Log current activity state
-    logger.debug(f"Current activity state:")
-    logger.debug(f"  - title: {db_activity.title}")
-    logger.debug(f"  - description: {db_activity.description[:50] + '...' if len(db_activity.description) > 50 else db_activity.description}")
-    logger.debug(f"  - start_datetime: {db_activity.start_datetime}")
-    logger.debug(f"  - end_datetime: {db_activity.end_datetime}")
-    logger.debug(f"  - location: {db_activity.location}")
-    logger.debug(f"  - featured_image_url: {db_activity.featured_image_url}")
+    logger.debug(f"Current activity state: title={db_activity.title}, "
+                 f"description={db_activity.description[:50] + '...' if len(db_activity.description) > 50 else db_activity.description}, "
+                 f"start_datetime={db_activity.start_datetime}, end_datetime={db_activity.end_datetime}, "
+                 f"location={db_activity.location}, featured_image_url={db_activity.featured_image_url}")
 
     updated = False
     changes_made = []
 
-    # Check and update title
+    # Update title
     if title is not None:
         title_trimmed = title.strip()
         if title_trimmed != db_activity.title:
             if len(title_trimmed) < 10 or len(title_trimmed) > 200:
                 logger.error(f"Invalid title length: {len(title_trimmed)}")
                 raise HTTPException(status_code=400, detail="Title must be 10-200 characters")
-            logger.debug(f"Title change detected: '{db_activity.title}' -> '{title_trimmed}'")
+            logger.debug(f"Title changed: '{db_activity.title}' -> '{title_trimmed}'")
             db_activity.title = title_trimmed
             updated = True
             changes_made.append("title")
         else:
             logger.debug("Title unchanged")
 
-    # Check and update description
+    # Update description
     if description is not None:
         description_trimmed = description.strip()
         if description_trimmed != db_activity.description:
             if len(description_trimmed) < 50:
                 logger.error(f"Invalid description length: {len(description_trimmed)}")
                 raise HTTPException(status_code=400, detail="Description must be at least 50 characters")
-            logger.debug(f"Description change detected (length: {len(db_activity.description)} -> {len(description_trimmed)})")
+            logger.debug(f"Description changed (length: {len(db_activity.description)} -> {len(description_trimmed)})")
             db_activity.description = description_trimmed
             updated = True
             changes_made.append("description")
         else:
             logger.debug("Description unchanged")
 
-    # Check and update start_datetime
+    # Update start_datetime
     if start_datetime is not None:
         try:
             parsed_start = datetime.fromisoformat(start_datetime.replace('Z', '+00:00'))
             parsed_start = parsed_start.replace(second=0, microsecond=0)
             existing_start = db_activity.start_datetime.replace(second=0, microsecond=0)
             if parsed_start != existing_start:
-                logger.debug(f"Start datetime change detected: '{existing_start}' -> '{parsed_start}'")
+                logger.debug(f"Start datetime changed: '{existing_start}' -> '{parsed_start}'")
                 db_activity.start_datetime = parsed_start
                 updated = True
                 changes_made.append("start_datetime")
@@ -269,7 +250,7 @@ def update_activity(
             logger.error(f"Invalid start_datetime format: {e}")
             raise HTTPException(status_code=400, detail="Invalid start_datetime format. Use ISO 8601")
 
-    # Check and update end_datetime
+    # Update end_datetime
     if end_datetime is not None:
         try:
             if end_datetime == "":
@@ -285,7 +266,7 @@ def update_activity(
                 if parsed_end != existing_end:
                     if parsed_end <= db_activity.start_datetime:
                         raise HTTPException(status_code=400, detail="end_datetime must be after start_datetime")
-                    logger.debug(f"End datetime change detected: '{existing_end}' -> '{parsed_end}'")
+                    logger.debug(f"End datetime changed: '{existing_end}' -> '{parsed_end}'")
                     db_activity.end_datetime = parsed_end
                     updated = True
                     changes_made.append("end_datetime")
@@ -295,11 +276,11 @@ def update_activity(
             logger.error(f"Invalid end_datetime format: {e}")
             raise HTTPException(status_code=400, detail="Invalid end_datetime format. Use ISO 8601")
 
-    # Check and update location
+    # Update location
     if location is not None:
         location_trimmed = location.strip() if location else None
         if location_trimmed != db_activity.location:
-            logger.debug(f"Location change detected: '{db_activity.location}' -> '{location_trimmed}'")
+            logger.debug(f"Location changed: '{db_activity.location}' -> '{location_trimmed}'")
             db_activity.location = location_trimmed
             updated = True
             changes_made.append("location")
@@ -317,36 +298,31 @@ def update_activity(
         
         if db_activity.featured_image_url:
             logger.debug(f"Deleting old image: {db_activity.featured_image_url}")
-            s3_service.delete_image(db_activity.featured_image_url)
+            await s3_service.delete_image(db_activity.featured_image_url)
         
-        new_image_url = s3_service.upload_image(featured_image)
+        new_image_url = await s3_service.upload_image(featured_image)
         if not new_image_url:
             logger.error("Failed to upload image to S3")
             raise HTTPException(status_code=500, detail="Failed to upload image")
         
-        logger.debug(f"Image change detected: '{db_activity.featured_image_url}' -> '{new_image_url}'")
+        logger.debug(f"Image changed: '{db_activity.featured_image_url}' -> '{new_image_url}'")
         db_activity.featured_image_url = new_image_url
         updated = True
         changes_made.append("featured_image")
         
     elif remove_image == "true" and db_activity.featured_image_url:
         logger.debug(f"Removing existing image: {db_activity.featured_image_url}")
-        s3_service.delete_image(db_activity.featured_image_url)
+        await s3_service.delete_image(db_activity.featured_image_url)
         db_activity.featured_image_url = None
         updated = True
         changes_made.append("removed_image")
 
-    # Log update summary
-    logger.debug(f"Update summary:")
-    logger.debug(f"  - Changes detected: {updated}")
-    logger.debug(f"  - Fields changed: {changes_made}")
+    logger.debug(f"Update summary: Changes detected: {updated}, Fields changed: {changes_made}")
 
-    # Handle the case when no changes are detected
     if not updated:
-        logger.info("No changes detected - returning existing activity without error")
+        logger.info("No changes detected - returning existing activity")
         return db_activity
 
-    # Commit changes to database
     try:
         db.commit()
         db.refresh(db_activity)
@@ -363,12 +339,12 @@ def update_activity(
     return db_activity
 
 @router.delete("/{activity_id}")
-def delete_activity(
+async def delete_activity(
     activity_id: int,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Delete an activity"""
+    """Delete an activity."""
     logger.debug(f"Deleting activity ID: {activity_id} by user: {current_user.id}")
     db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
     if db_activity is None:
@@ -377,20 +353,20 @@ def delete_activity(
     
     if db_activity.featured_image_url:
         logger.debug(f"Deleting image: {db_activity.featured_image_url}")
-        s3_service.delete_image(db_activity.featured_image_url)
+        await s3_service.delete_image(db_activity.featured_image_url)
     
     db.delete(db_activity)
     db.commit()
     logger.info(f"Deleted activity ID: {activity_id}")
     return {"detail": "Activity deleted"}
 
-@router.get("/my/activities", response_model=list[ActivitySchema])
-def get_my_activities(
+@router.get("/my/activities", response_model=list[Activity])
+async def get_my_activities(
     skip: int = 0,
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Get activities published by the current admin"""
+    """Get activities published by the current admin."""
     logger.debug(f"Fetching activities for user: {current_user.id}, skip={skip}, limit={limit}")
     return db.query(ActivityModel).filter(ActivityModel.publisher_id == current_user.id).offset(skip).limit(limit).all()
