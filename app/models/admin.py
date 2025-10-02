@@ -21,6 +21,6 @@ class Admin(Base):
     
     # Relationship to News
     published_news = relationship("News", back_populates="publisher", cascade="all, delete-orphan")
-    
+    published_activities = relationship("Activity", back_populates="publisher")
     def __repr__(self):
         return f"<Admin(id={self.id}, username='{self.username}', email='{self.email}')>"
