@@ -1,4 +1,3 @@
-# app/models/activity.py
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -16,8 +15,8 @@ class Activity(Base):
     published_at = Column(DateTime, nullable=False)
     publisher_id = Column(Integer, ForeignKey("admins.id"), nullable=False)
     
-    # Relationship to Admin (Publisher)
-    publisher = relationship("Admin", back_populates="published_activities")
+    # Relationship to Admin (Publisher) with eager loading
+    publisher = relationship("Admin", back_populates="published_activities", lazy="joined")
     
     def __repr__(self):
         return f"<Activity(id={self.id}, title='{self.title}', publisher_id={self.publisher_id})>"

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models.activity import Activity as ActivityModel
@@ -7,10 +7,10 @@ from app.schemas.activity import Activity, ActivityCreate, ActivityUpdate
 from app.models.admin import Admin
 from app.services.s3_service import s3_service
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import logging
 
-# FIXED: Import get_current_admin from the correct location
+# Import get_current_admin from the correct location
 from app.auth.auth import get_current_admin
 
 # Configure logging
@@ -34,6 +34,16 @@ async def create_activity(
 ):
     """Create a new activity with optional featured image."""
     logger.debug(f"Creating activity by user: {current_user.id}")
+    
+    # Validate title and description lengths
+    title = title.strip()
+    description = description.strip()
+    if len(title) < 10 or len(title) > 255:
+        logger.error(f"Invalid title length: {len(title)}")
+        raise HTTPException(status_code=400, detail="Title must be 10-255 characters")
+    if len(description) < 50:
+        logger.error(f"Invalid description length: {len(description)}")
+        raise HTTPException(status_code=400, detail="Description must be at least 50 characters")
     
     # Parse start_datetime
     try:
@@ -71,8 +81,8 @@ async def create_activity(
     
     # Create activity
     db_activity = ActivityModel(
-        title=title.strip(),
-        description=description.strip(),
+        title=title,
+        description=description,
         start_datetime=parsed_start,
         end_datetime=parsed_end,
         location=location.strip() if location else None,
@@ -93,26 +103,32 @@ async def create_activity(
     
     return db_activity
 
-@router.get("/", response_model=list[Activity])
+@router.get("/", response_model=dict)
 async def read_activities_list(
     skip: int = 0,
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Get list of activities (admin only)."""
+    """Get list of activities with total count (admin only)."""
     logger.debug(f"Fetching activities list: skip={skip}, limit={limit}")
-    return db.query(ActivityModel).offset(skip).limit(limit).all()
+    query = db.query(ActivityModel).options(joinedload(ActivityModel.publisher))
+    total = query.count()
+    activities = query.offset(skip).limit(limit).all()
+    return {"items": activities, "total": total}
 
-@public_activity_router.get("/", response_model=list[Activity])
+@public_activity_router.get("/", response_model=dict)
 async def read_public_activities_list(
     skip: int = 0,
     limit: int = 10,
     db: Session = Depends(get_db)
 ):
-    """Get list of activities (public access), ordered by start_datetime ascending."""
+    """Get list of activities with total count (public access), ordered by start_datetime ascending."""
     logger.debug(f"Fetching public activities list: skip={skip}, limit={limit}")
-    return db.query(ActivityModel).order_by(ActivityModel.start_datetime.asc()).offset(skip).limit(limit).all()
+    query = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).order_by(ActivityModel.start_datetime.asc())
+    total = query.count()
+    activities = query.offset(skip).limit(limit).all()
+    return {"items": activities, "total": total}
 
 @router.get("/{activity_id}", response_model=Activity)
 async def read_activity(
@@ -122,7 +138,7 @@ async def read_activity(
 ):
     """Get a specific activity (admin only)."""
     logger.debug(f"Fetching activity ID: {activity_id}")
-    db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
+    db_activity = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).filter(ActivityModel.id == activity_id).first()
     if db_activity is None:
         logger.warning(f"Activity ID {activity_id} not found")
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -135,7 +151,7 @@ async def read_public_activity(
 ):
     """Get a specific activity (public access)."""
     logger.debug(f"Fetching public activity ID: {activity_id}")
-    db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
+    db_activity = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).filter(ActivityModel.id == activity_id).first()
     if db_activity is None:
         logger.warning(f"Activity ID {activity_id} not found")
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -161,7 +177,7 @@ async def update_activity(
                  f"featured_image={featured_image.filename if featured_image else None}, remove_image={remove_image}")
 
     # Fetch the existing activity
-    db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
+    db_activity = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).filter(ActivityModel.id == activity_id).first()
     if db_activity is None:
         logger.warning(f"Activity ID {activity_id} not found")
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -178,9 +194,9 @@ async def update_activity(
     if title is not None:
         title_trimmed = title.strip()
         if title_trimmed != db_activity.title:
-            if len(title_trimmed) < 10 or len(title_trimmed) > 200:
+            if len(title_trimmed) < 10 or len(title_trimmed) > 255:
                 logger.error(f"Invalid title length: {len(title_trimmed)}")
-                raise HTTPException(status_code=400, detail="Title must be 10-200 characters")
+                raise HTTPException(status_code=400, detail="Title must be 10-255 characters")
             logger.debug(f"Title changed: '{db_activity.title}' -> '{title_trimmed}'")
             db_activity.title = title_trimmed
             updated = True
@@ -249,6 +265,9 @@ async def update_activity(
     if location is not None:
         location_trimmed = location.strip() if location else None
         if location_trimmed != db_activity.location:
+            if location_trimmed and len(location_trimmed) > 255:
+                logger.error(f"Invalid location length: {len(location_trimmed)}")
+                raise HTTPException(status_code=400, detail="Location must be 255 characters or less")
             logger.debug(f"Location changed: '{db_activity.location}' -> '{location_trimmed}'")
             db_activity.location = location_trimmed
             updated = True
@@ -315,7 +334,7 @@ async def delete_activity(
 ):
     """Delete an activity."""
     logger.debug(f"Deleting activity ID: {activity_id} by user: {current_user.id}")
-    db_activity = db.query(ActivityModel).filter(ActivityModel.id == activity_id).first()
+    db_activity = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).filter(ActivityModel.id == activity_id).first()
     if db_activity is None:
         logger.warning(f"Activity ID {activity_id} not found")
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -329,13 +348,16 @@ async def delete_activity(
     logger.info(f"Deleted activity ID: {activity_id}")
     return {"detail": "Activity deleted"}
 
-@router.get("/my/activities", response_model=list[Activity])
+@router.get("/my/activities", response_model=dict)
 async def get_my_activities(
     skip: int = 0,
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Get activities published by the current admin."""
+    """Get activities published by the current admin with total count."""
     logger.debug(f"Fetching activities for user: {current_user.id}, skip={skip}, limit={limit}")
-    return db.query(ActivityModel).filter(ActivityModel.publisher_id == current_user.id).offset(skip).limit(limit).all()
+    query = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).filter(ActivityModel.publisher_id == current_user.id)
+    total = query.count()
+    activities = query.offset(skip).limit(limit).all()
+    return {"items": activities, "total": total}
