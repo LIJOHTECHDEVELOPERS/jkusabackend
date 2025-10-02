@@ -11,7 +11,7 @@ from typing import Optional
 import logging
 
 # FIXED: Import get_current_admin from the correct location
-from app.utils.auth import get_current_admin
+from app.auth.auth import get_current_admin
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
