@@ -10,10 +10,8 @@ from datetime import datetime
 from typing import Optional
 import logging
 
-# CRITICAL FIX: Import get_current_admin from your existing auth dependency
-# This ensures consistent JWT validation across all routers
-from app.dependencies import get_current_admin  # or wherever your other routers import it from
-# Common locations: app.dependencies, app.utils.auth, app.routers.admin_auth
+# FIXED: Import get_current_admin from the correct location
+from app.auth.auth import get_current_admin
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -22,11 +20,6 @@ logger = logging.getLogger(__name__)
 # Routers
 router = APIRouter(prefix="/admin/activities", tags=["admin_activities"])
 public_activity_router = APIRouter(prefix="/activities", tags=["public_activities"])
-
-# REMOVED: Duplicate get_current_admin function
-# REMOVED: SECRET_KEY = os.getenv("SECRET_KEY")
-# REMOVED: ALGORITHM = os.getenv("ALGORITHM")
-# REMOVED: admin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="admin/auth/login")
 
 @router.post("/", response_model=Activity)
 async def create_activity(
