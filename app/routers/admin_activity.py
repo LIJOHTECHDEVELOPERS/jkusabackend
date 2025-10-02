@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 from app.database import get_db
 from app.models.activity import Activity as ActivityModel
 from app.schemas.activity import Activity, ActivityCreate, ActivityUpdate
@@ -8,6 +9,7 @@ from app.models.admin import Admin
 from app.services.s3_service import s3_service
 from datetime import datetime
 from typing import Optional, List
+from pydantic import BaseModel
 import logging
 
 # Import get_current_admin from the correct location
@@ -16,6 +18,11 @@ from app.auth.auth import get_current_admin
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Pydantic model for list response
+class ActivityListResponse(BaseModel):
+    items: List[Activity]
+    total: int
 
 # Routers
 router = APIRouter(prefix="/admin/activities", tags=["admin_activities"])
@@ -103,29 +110,55 @@ async def create_activity(
     
     return db_activity
 
-@router.get("/", response_model=dict)
+@router.get("/", response_model=ActivityListResponse)
 async def read_activities_list(
     skip: int = 0,
     limit: int = 10,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
     """Get list of activities with total count (admin only)."""
-    logger.debug(f"Fetching activities list: skip={skip}, limit={limit}")
+    logger.debug(f"Fetching activities list: skip={skip}, limit={limit}, search={search}")
     query = db.query(ActivityModel).options(joinedload(ActivityModel.publisher))
+    if search:
+        search = f"%{search}%"
+        query = query.join(Admin).filter(
+            or_(
+                ActivityModel.title.ilike(search),
+                ActivityModel.description.ilike(search),
+                ActivityModel.location.ilike(search),
+                Admin.first_name.ilike(search),
+                Admin.last_name.ilike(search),
+                Admin.username.ilike(search)
+            )
+        )
     total = query.count()
     activities = query.offset(skip).limit(limit).all()
     return {"items": activities, "total": total}
 
-@public_activity_router.get("/", response_model=dict)
+@public_activity_router.get("/", response_model=ActivityListResponse)
 async def read_public_activities_list(
     skip: int = 0,
     limit: int = 10,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Get list of activities with total count (public access), ordered by start_datetime ascending."""
-    logger.debug(f"Fetching public activities list: skip={skip}, limit={limit}")
+    logger.debug(f"Fetching public activities list: skip={skip}, limit={limit}, search={search}")
     query = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).order_by(ActivityModel.start_datetime.asc())
+    if search:
+        search = f"%{search}%"
+        query = query.join(Admin).filter(
+            or_(
+                ActivityModel.title.ilike(search),
+                ActivityModel.description.ilike(search),
+                ActivityModel.location.ilike(search),
+                Admin.first_name.ilike(search),
+                Admin.last_name.ilike(search),
+                Admin.username.ilike(search)
+            )
+        )
     total = query.count()
     activities = query.offset(skip).limit(limit).all()
     return {"items": activities, "total": total}
@@ -348,16 +381,29 @@ async def delete_activity(
     logger.info(f"Deleted activity ID: {activity_id}")
     return {"detail": "Activity deleted"}
 
-@router.get("/my/activities", response_model=dict)
+@router.get("/my/activities", response_model=ActivityListResponse)
 async def get_my_activities(
     skip: int = 0,
     limit: int = 10,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
     """Get activities published by the current admin with total count."""
-    logger.debug(f"Fetching activities for user: {current_user.id}, skip={skip}, limit={limit}")
+    logger.debug(f"Fetching activities for user: {current_user.id}, skip={skip}, limit={limit}, search={search}")
     query = db.query(ActivityModel).options(joinedload(ActivityModel.publisher)).filter(ActivityModel.publisher_id == current_user.id)
+    if search:
+        search = f"%{search}%"
+        query = query.join(Admin).filter(
+            or_(
+                ActivityModel.title.ilike(search),
+                ActivityModel.description.ilike(search),
+                ActivityModel.location.ilike(search),
+                Admin.first_name.ilike(search),
+                Admin.last_name.ilike(search),
+                Admin.username.ilike(search)
+            )
+        )
     total = query.count()
     activities = query.offset(skip).limit(limit).all()
     return {"items": activities, "total": total}
