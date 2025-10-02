@@ -2,20 +2,27 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import user_auth, admin_auth, admin_announcement, admin_leadership, admin_event, admin_news
-# --- NEW IMPORTS FOR ACTIVITIES ---
-from app.routers import admin_activity # Import the module
-from app.routers.admin_activity import public_activity_router # Import the public router
-# -----------------------------------
+from app.routers import admin_activity # NEW: Import the admin activity module
+from app.routers.admin_activity import public_activity_router # NEW: Import the public activity router
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
 from app.routers.admin_event import public_event_router
 from app.routers.admin_leadership import public_leadership_router
 from app.database import engine, Base
 import logging
+# --- ENVIRONMENT VARIABLE IMPORTS ---
+import os
+from dotenv import load_dotenv
+# ------------------------------------
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# --- FIX: Load environment variables explicitly and early ---
+# This ensures SECRET_KEY and ALGORITHM are available for JWT decryption.
+load_dotenv()
+# ------------------------------------------------------------
 
 app = FastAPI(title="CMSystem we are building")
 
@@ -80,10 +87,9 @@ app.include_router(admin_event.router)
 app.include_router(public_event_router)
 app.include_router(admin_news.router)
 app.include_router(public_news_router)
-# --- NEW ROUTER INCLUSIONS FOR ACTIVITIES ---
+# NEW: Include the activity routers
 app.include_router(admin_activity.router)
 app.include_router(public_activity_router)
-# --------------------------------------------
 
 @app.get("/")
 def read_root():
