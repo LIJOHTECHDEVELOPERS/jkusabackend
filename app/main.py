@@ -21,6 +21,8 @@ origins = [
     "http://127.0.0.1:8080",
     "https://digikenya.co.ke",
     "http://localhost:8081",
+    "https://dashboard.jkusa.org",
+    "https://jkusa.org",
 ]
 
 app.add_middleware(
