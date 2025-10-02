@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from jose import JWTError, jwt
 from app.database import get_db
 from app.models.activity import Activity as ActivityModel
 from app.schemas.activity import Activity, ActivityCreate, ActivityUpdate
@@ -11,46 +9,24 @@ from app.services.s3_service import s3_service
 from datetime import datetime
 from typing import Optional
 import logging
-import os
+
+# CRITICAL FIX: Import get_current_admin from your existing auth dependency
+# This ensures consistent JWT validation across all routers
+from app.dependencies import get_current_admin  # or wherever your other routers import it from
+# Common locations: app.dependencies, app.utils.auth, app.routers.admin_auth
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# JWT settings
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
-admin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="admin/auth/login")
-
 # Routers
 router = APIRouter(prefix="/admin/activities", tags=["admin_activities"])
 public_activity_router = APIRouter(prefix="/activities", tags=["public_activities"])
 
-def get_current_admin(token: str = Depends(admin_oauth2_scheme), db: Session = Depends(get_db)):
-    """Validates JWT token and returns the current admin user."""
-    logger.debug(f"Validating token: {token[:10]}...")
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate admin credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        logger.debug(f"Token payload: {payload}")
-        username: str = payload.get("sub")
-        user_type: str = payload.get("type")
-        if username is None or user_type != "admin":
-            logger.warning(f"Invalid token: sub={username}, type={user_type}")
-            raise credentials_exception
-        admin = db.query(Admin).filter(Admin.username == username).first()
-        if admin is None:
-            logger.warning(f"Admin not found: {username}")
-            raise credentials_exception
-        logger.debug(f"Authenticated admin: {admin.username}")
-        return admin
-    except JWTError as e:
-        logger.error(f"JWT decode error: {e}")
-        raise credentials_exception
+# REMOVED: Duplicate get_current_admin function
+# REMOVED: SECRET_KEY = os.getenv("SECRET_KEY")
+# REMOVED: ALGORITHM = os.getenv("ALGORITHM")
+# REMOVED: admin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="admin/auth/login")
 
 @router.post("/", response_model=Activity)
 async def create_activity(
