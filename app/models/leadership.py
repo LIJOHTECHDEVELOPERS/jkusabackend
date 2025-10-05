@@ -17,6 +17,7 @@ class LeadershipCategory(enum.Enum):
     HALL_REP = "HALL_REP"
     LEGAL_AFFAIRS_REP = "LEGAL_AFFAIRS_REP"
     SPECIAL_NEEDS_REP = "SPECIAL_NEEDS_REP"
+    JKUCA_EXECUTIVE = "JKUCA_EXECUTIVE"
     
     # Other Campuses
     KAREN_EXECUTIVE = "KAREN_EXECUTIVE"
