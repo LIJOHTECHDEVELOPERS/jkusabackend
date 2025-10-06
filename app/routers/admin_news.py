@@ -61,11 +61,28 @@ def get_current_admin(token: str = Depends(admin_oauth2_scheme), db: Session = D
         logger.error(f"JWT decode error: {e}")
         raise credentials_exception
 
+def generate_unique_slug(db: Session, title: str, news_id: Optional[int] = None) -> str:
+    """Generate a unique slug, appending numbers if necessary"""
+    base_slug = NewsModel.generate_slug(title)
+    slug = base_slug
+    counter = 1
+    
+    while True:
+        query = db.query(NewsModel).filter(NewsModel.slug == slug)
+        if news_id:
+            query = query.filter(NewsModel.id != news_id)
+        
+        if not query.first():
+            return slug
+        
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
 @router.post("/", response_model=NewsSchema)
 def create_news(
     title: str = Form(...),
     content: str = Form(...),
-    published_at: str = Form(...),  # Accept ISO string
+    published_at: str = Form(...),
     featured_image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
@@ -76,11 +93,14 @@ def create_news(
     # Parse published_at
     try:
         parsed_published_at = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
-        # Normalize to remove seconds and microseconds for consistency
         parsed_published_at = parsed_published_at.replace(second=0, microsecond=0)
     except ValueError as e:
         logger.error(f"Invalid published_at format: {e}")
         raise HTTPException(status_code=400, detail="Invalid published_at format. Use ISO 8601")
+
+    # Generate unique slug
+    slug = generate_unique_slug(db, title)
+    logger.debug(f"Generated slug: {slug}")
 
     # Validate and upload featured image
     featured_image_url = None
@@ -99,6 +119,7 @@ def create_news(
     # Create news article
     db_news = NewsModel(
         title=title.strip(),
+        slug=slug,
         content=content.strip(),
         featured_image_url=featured_image_url,
         published_at=parsed_published_at,
@@ -109,7 +130,7 @@ def create_news(
         db.add(db_news)
         db.commit()
         db.refresh(db_news)
-        logger.info(f"Created article ID {db_news.id}: {db_news.title}")
+        logger.info(f"Created article ID {db_news.id}: {db_news.title} (slug: {slug})")
     except IntegrityError as e:
         db.rollback()
         logger.error(f"Database integrity error: {e}")
@@ -120,18 +141,18 @@ def create_news(
 @router.get("/", response_model=list[NewsSchema])
 def read_news_list(
     skip: int = 0,
-    limit: int = 10,
+    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
     """Get list of news articles (admin only)"""
     logger.debug(f"Fetching news list: skip={skip}, limit={limit}")
-    return db.query(NewsModel).offset(skip).limit(limit).all()
+    return db.query(NewsModel).order_by(NewsModel.published_at.desc()).offset(skip).limit(limit).all()
 
 @public_news_router.get("/", response_model=list[NewsSchema])
 def read_public_news_list(
     skip: int = 0,
-    limit: int = 10,
+    limit: int = 100,
     db: Session = Depends(get_db)
 ):
     """Get list of news articles (public access)"""
@@ -144,7 +165,7 @@ def read_news(
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
-    """Get a specific news article (admin only)"""
+    """Get a specific news article by ID (admin only)"""
     logger.debug(f"Fetching article ID: {news_id}")
     db_news = db.query(NewsModel).filter(NewsModel.id == news_id).first()
     if db_news is None:
@@ -157,11 +178,24 @@ def read_public_news(
     news_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get a specific news article (public access)"""
+    """Get a specific news article by ID (public access)"""
     logger.debug(f"Fetching public article ID: {news_id}")
     db_news = db.query(NewsModel).filter(NewsModel.id == news_id).first()
     if db_news is None:
         logger.warning(f"Article ID {news_id} not found")
+        raise HTTPException(status_code=404, detail="News not found")
+    return db_news
+
+@public_news_router.get("/slug/{slug}", response_model=NewsSchema)
+def read_news_by_slug(
+    slug: str,
+    db: Session = Depends(get_db)
+):
+    """Get a specific news article by slug (public access)"""
+    logger.debug(f"Fetching article by slug: {slug}")
+    db_news = db.query(NewsModel).filter(NewsModel.slug == slug).first()
+    if db_news is None:
+        logger.warning(f"Article with slug '{slug}' not found")
         raise HTTPException(status_code=404, detail="News not found")
     return db_news
 
@@ -194,6 +228,7 @@ def update_news(
     # Log current article state
     logger.debug(f"Current article state:")
     logger.debug(f"  - title: {db_news.title}")
+    logger.debug(f"  - slug: {db_news.slug}")
     logger.debug(f"  - content: {db_news.content[:50] + '...' if len(db_news.content) > 50 else db_news.content}")
     logger.debug(f"  - published_at: {db_news.published_at}")
     logger.debug(f"  - featured_image_url: {db_news.featured_image_url}")
@@ -201,18 +236,25 @@ def update_news(
     updated = False
     changes_made = []
 
-    # Check and update title
+    # Check and update title (and regenerate slug if title changes)
     if title is not None:
         title_trimmed = title.strip()
         if title_trimmed != db_news.title:
-            if len(title_trimmed) < 10 or len(title_trimmed) > 200:
+            if len(title_trimmed) < 10 or len(title_trimmed) > 255:
                 logger.error(f"Invalid title length: {len(title_trimmed)}")
-                raise HTTPException(status_code=400, detail="Title must be 10-200 characters")
+                raise HTTPException(status_code=400, detail="Title must be 10-255 characters")
             
             logger.debug(f"Title change detected: '{db_news.title}' -> '{title_trimmed}'")
             db_news.title = title_trimmed
+            
+            # Regenerate slug when title changes
+            new_slug = generate_unique_slug(db, title_trimmed, news_id)
+            logger.debug(f"Slug updated: '{db_news.slug}' -> '{new_slug}'")
+            db_news.slug = new_slug
+            
             updated = True
             changes_made.append("title")
+            changes_made.append("slug")
         else:
             logger.debug("Title unchanged")
 
@@ -343,10 +385,10 @@ def delete_news(
 @router.get("/my/articles", response_model=list[NewsSchema])
 def get_my_articles(
     skip: int = 0,
-    limit: int = 10,
+    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: Admin = Depends(get_current_admin)
 ):
     """Get news articles published by the current admin"""
     logger.debug(f"Fetching articles for user: {current_user.id}, skip={skip}, limit={limit}")
-    return db.query(NewsModel).filter(NewsModel.publisher_id == current_user.id).offset(skip).limit(limit).all()
+    return db.query(NewsModel).filter(NewsModel.publisher_id == current_user.id).order_by(NewsModel.published_at.desc()).offset(skip).limit(limit).all()
