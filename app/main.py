@@ -1,6 +1,15 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
+# IMPORTANT: Import all models BEFORE creating Base.metadata
+from app.database import engine, Base
+from app.models.admin import Admin
+from app.models.activity import Activity
+from app.models.leadership import Leadership, CampusType, LeadershipCategory
+from app.models.gallery import Gallery, GalleryCategory
+# Import any other models you have (News, Event, Announcement, etc.)
+
 from app.routers import (
     user_auth, 
     admin_auth, 
@@ -8,14 +17,13 @@ from app.routers import (
     admin_leadership, 
     admin_event, 
     admin_news,
-    admin_gallery  # NEW IMPORT
+    admin_gallery
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
 from app.routers.admin_event import public_event_router
 from app.routers.admin_leadership import public_leadership_router
-from app.routers.admin_gallery import public_gallery_router  # NEW IMPORT
-from app.database import engine, Base
+from app.routers.admin_gallery import public_gallery_router
 import logging
 
 # Configure logging
@@ -71,7 +79,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         },
     )
 
-# Create database tables
+# Create database tables - ALL models must be imported above for this to work
 Base.metadata.create_all(bind=engine)
 
 # Include routers
@@ -85,8 +93,8 @@ app.include_router(admin_event.router)
 app.include_router(public_event_router)
 app.include_router(admin_news.router)
 app.include_router(public_news_router)
-app.include_router(admin_gallery.router)  # NEW ROUTER
-app.include_router(public_gallery_router)  # NEW ROUTER
+app.include_router(admin_gallery.router)
+app.include_router(public_gallery_router)
 
 @app.get("/")
 def read_root():
