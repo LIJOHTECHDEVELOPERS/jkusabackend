@@ -1,15 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import logging
-
-# --- CRITICAL FIX: Load environment variables FIRST, before ANY imports ---
-import os
-from dotenv import load_dotenv
-load_dotenv()  # This MUST happen before importing routers
-# -------------------------------------------------------------------------
-
-# NOW import routers (after environment variables are loaded)
 from app.routers import (
     user_auth, 
     admin_auth, 
@@ -17,14 +8,15 @@ from app.routers import (
     admin_leadership, 
     admin_event, 
     admin_news,
-    admin_activity
+    admin_gallery  # NEW IMPORT
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
 from app.routers.admin_event import public_event_router
 from app.routers.admin_leadership import public_leadership_router
-from app.routers.admin_activity import public_activity_router
+from app.routers.admin_gallery import public_gallery_router  # NEW IMPORT
 from app.database import engine, Base
+import logging
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -93,8 +85,8 @@ app.include_router(admin_event.router)
 app.include_router(public_event_router)
 app.include_router(admin_news.router)
 app.include_router(public_news_router)
-app.include_router(admin_activity.router)
-app.include_router(public_activity_router)
+app.include_router(admin_gallery.router)  # NEW ROUTER
+app.include_router(public_gallery_router)  # NEW ROUTER
 
 @app.get("/")
 def read_root():
