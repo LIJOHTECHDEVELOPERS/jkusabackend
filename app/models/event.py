@@ -8,4 +8,5 @@ class Event(Base):
     description = Column(String)
     date = Column(DateTime)
     location = Column(String)
-    image_url = Column(String, nullable=True)  # Added image_url field
+    image_url = Column(String, nullable=True)
+    slug = Column(String, unique=True, index=True, nullable=False)  # Added slug field

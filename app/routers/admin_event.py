@@ -8,13 +8,22 @@ from app.services.s3_service import s3_service
 from datetime import datetime
 from typing import List
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/events", tags=["admin_events"])
-
-
 public_event_router = APIRouter(prefix="/events", tags=["public_events"])
+
+def generate_slug(title: str, db: Session, event_id: int = None) -> str:
+    """Generate a unique slug from the title."""
+    slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+    base_slug = slug
+    counter = 1
+    while db.query(Event).filter(Event.slug == slug, Event.id != event_id).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    return slug
 
 @public_event_router.get("/", response_model=List[EventSchema])
 def read_public_events(
@@ -30,6 +39,24 @@ def read_public_events(
         return events
     except Exception as e:
         logger.error(f"Error fetching public events: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@public_event_router.get("/slug/{slug}", response_model=EventSchema)
+def read_public_event_by_slug(
+    slug: str,
+    db: Session = Depends(get_db)
+):
+    """Get a specific event by slug (Public access)"""
+    logger.debug(f"Fetching public event by slug: {slug}")
+    try:
+        db_event = db.query(Event).filter(Event.slug == slug).first()
+        if db_event is None:
+            logger.warning(f"Event with slug {slug} not found")
+            raise HTTPException(status_code=404, detail="Event not found")
+        logger.info(f"Retrieved event with slug: {slug}")
+        return db_event
+    except Exception as e:
+        logger.error(f"Error fetching event by slug {slug}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @public_event_router.get("/{event_id}", response_model=EventSchema)
@@ -74,18 +101,21 @@ async def create_event(
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image")
 
+        slug = generate_slug(title, db)
+
         db_event = Event(
             title=title,
             description=description,
             date=date,
             location=location,
-            image_url=image_url
+            image_url=image_url,
+            slug=slug
         )
         db.add(db_event)
         db.commit()
         db.refresh(db_event)
         
-        logger.info(f"Admin {current_admin.username} created event: {title}")
+        logger.info(f"Admin {current_admin.username} created event: {title} with slug {slug}")
         return db_event
         
     except HTTPException:
@@ -155,6 +185,10 @@ async def update_event(
             if not new_image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image")
 
+        # Regenerate slug if title changes
+        if title != db_event.title:
+            db_event.slug = generate_slug(title, db, event_id)
+
         db_event.title = title
         db_event.description = description
         db_event.date = date
@@ -171,7 +205,7 @@ async def update_event(
             except Exception as cleanup_error:
                 logger.warning(f"Failed to delete old image: {cleanup_error}")
         
-        logger.info(f"Admin {current_admin.username} updated event {event_id}")
+        logger.info(f"Admin {current_admin.username} updated event {event_id} with slug {db_event.slug}")
         return db_event
         
     except HTTPException:

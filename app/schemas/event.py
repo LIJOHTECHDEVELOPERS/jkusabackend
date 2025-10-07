@@ -7,7 +7,8 @@ class EventBase(BaseModel):
     description: str
     date: datetime
     location: str
-    image_url: Optional[str] = None  # Added image_url field
+    image_url: Optional[str] = None
+    slug: str  # Added slug field
 
 class EventCreate(EventBase):
     pass
