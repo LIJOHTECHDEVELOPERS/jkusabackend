@@ -17,6 +17,11 @@ import logging
 import os
 from dotenv import load_dotenv
 
+# Add Pillow for image processing
+from PIL import Image
+import io
+import boto3  # Assuming you're using boto3 for S3; add if not already imported in s3_service
+
 # Load environment variables
 load_dotenv()
 
@@ -392,3 +397,47 @@ def get_my_articles(
     """Get news articles published by the current admin"""
     logger.debug(f"Fetching articles for user: {current_user.id}, skip={skip}, limit={limit}")
     return db.query(NewsModel).filter(NewsModel.publisher_id == current_user.id).order_by(NewsModel.published_at.desc()).offset(skip).limit(limit).all()
+
+# Assuming s3_service.py is a separate file; here's the updated version with image optimization
+# s3_service.py content (updated):
+
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+REGION = os.getenv("AWS_REGION")
+s3_client = boto3.client('s3')  # Assuming AWS credentials are configured
+
+def upload_image(file: UploadFile) -> str:
+    """Upload and optimize image to S3"""
+    # Read the file
+    contents = file.file.read()
+    image = Image.open(io.BytesIO(contents))
+    
+    # Resize to 1200x630 (preserve aspect ratio, crop/pad if needed)
+    image.thumbnail((1200, 630))  # Resize proportionally
+    if image.width < 1200 or image.height < 630:
+        # Pad to exact size with white background
+        new_image = Image.new("RGB", (1200, 630), (255, 255, 255))
+        new_image.paste(image, ((1200 - image.width) // 2, (630 - image.height) // 2))
+        image = new_image
+    
+    # Compress (aim for <300KB)
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=85, optimize=True)  # Adjust quality if needed
+    output.seek(0)
+    
+    # Generate unique key
+    key = f"news/images/{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.filename.replace(' ', '_')}"
+    
+    # Upload to S3
+    s3_client.upload_fileobj(
+        output,
+        BUCKET_NAME,
+        key,
+        ExtraArgs={'ContentType': 'image/jpeg', 'ACL': 'public-read'}  # Make public
+    )
+    
+    return f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{key}"
+
+def delete_image(image_url: str):
+    """Delete image from S3"""
+    key = image_url.split(f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/")[1]
+    s3_client.delete_object(Bucket=BUCKET_NAME, Key=key)
