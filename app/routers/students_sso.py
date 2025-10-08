@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
 from app.database import get_db
-from app.models import College, School, student # Ensure 'student' is the SQLAlchemy model name
+from app.models.student import College, School, student # Ensure 'student' is the SQLAlchemy model name
 from app.schemas import studentCreate, studentLogin, studentResponse, TokenData
 import uuid
 import os
