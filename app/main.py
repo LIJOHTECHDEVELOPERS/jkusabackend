@@ -8,7 +8,9 @@ from app.models.admin import Admin
 from app.models.activity import Activity
 from app.models.leadership import Leadership, CampusType, LeadershipCategory
 from app.models.gallery import Gallery, GalleryCategory
-# Import any other models you have (News, Event, Announcement, etc.)
+from app.models.event import Event
+from app.models.resource import Resource
+# Import any other models you have (News, Announcement, etc.)
 
 from app.routers import (
     user_auth, 
@@ -17,13 +19,15 @@ from app.routers import (
     admin_leadership, 
     admin_event, 
     admin_news,
-    admin_gallery
+    admin_gallery,
+    admin_resources
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
 from app.routers.admin_event import public_event_router
 from app.routers.admin_leadership import public_leadership_router
 from app.routers.admin_gallery import public_gallery_router
+from app.routers.admin_resources import public_resource_router
 import logging
 
 # Configure logging
@@ -95,6 +99,8 @@ app.include_router(admin_news.router)
 app.include_router(public_news_router)
 app.include_router(admin_gallery.router)
 app.include_router(public_gallery_router)
+app.include_router(admin_resources.router)
+app.include_router(public_resource_router)
 
 @app.get("/")
 def read_root():
