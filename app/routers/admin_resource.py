@@ -102,7 +102,7 @@ async def create_resource(
     current_admin=Depends(get_current_admin)
 ):
     """Create a new resource with PDF upload (Admin only)"""
-    logger.debug(f"Creating resource by admin: {current_admin.username}")
+    logger.debug(f"Creating resource by admin: {current_admin.username} (ID: {current_admin.id})")
     
     pdf_url = None
     try:
@@ -131,7 +131,9 @@ async def create_resource(
             title=title.strip(),
             description=description.strip(),
             pdf_url=pdf_url,
-            slug=slug
+            slug=slug,
+            # ➡️ FIX APPLIED HERE: Pass the authenticated admin's ID
+            admin_id=current_admin.id 
         )
         db.add(db_resource)
         db.commit()
@@ -302,15 +304,13 @@ async def update_resource(
         if new_pdf_url and old_pdf_url:
             try:
                 s3_service.delete_file(old_pdf_url)  # Assuming delete_file or similar
-                logger.debug(f"Deleted old PDF: {old_pdf_url}")
             except Exception as cleanup_error:
                 logger.warning(f"Failed to delete old PDF: {cleanup_error}")
-        
+            
         # Delete old PDF if removal was requested
         if remove_pdf == "true" and old_pdf_url:
             try:
                 s3_service.delete_file(old_pdf_url)
-                logger.debug(f"Deleted removed PDF: {old_pdf_url}")
             except Exception as cleanup_error:
                 logger.warning(f"Failed to delete removed PDF: {cleanup_error}")
         
@@ -353,7 +353,6 @@ def delete_resource(
         if pdf_url:
             try:
                 s3_service.delete_file(pdf_url)  # Assuming delete_file or similar
-                logger.debug(f"Deleted PDF: {pdf_url}")
             except Exception as cleanup_error:
                 logger.warning(f"Failed to delete PDF from S3: {cleanup_error}")
         
