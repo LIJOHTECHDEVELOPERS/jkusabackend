@@ -8,7 +8,8 @@ from typing import Optional
 import uuid
 import os
 import smtplib
-from email.mime.text import MIMEText
+import ssl
+from email.message import EmailMessage
 import logging
 
 # --- Assuming these modules and classes are correctly defined and imported ---
@@ -29,11 +30,13 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 COOKIE_NAME = "access_token"
 
-# Email Configuration (for verification)
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
-EMAIL_STUDENT = os.getenv("EMAIL_STUDENT", "your-email@example.com") # Sender Email
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "your-email-password") # Sender Password
+# Email Configuration (ZeptoMail)
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.zeptomail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "emailapikey")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "wSsVR611/kPwCq17z2Kpc+1unVtcAlP2EhsriVr37CD0GayQosdtlBfLB1f2T/ZNEW88R2AQ8LMsnx9WhmBf2d4uylgHXCiF9mqRe1U4J3x17qnvhDzDX21YkxKLKIsAxw5vkmFhFM8k+g==")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@jkusa.org")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://jkusa.org")  # Your actual frontend domain
 
 # REMOVED: pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # This defines the token scheme for the /docs page and is used in the dependency injection
@@ -92,23 +95,59 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 def send_verification_email(email: str, token: str):
-    """Sends an email verification link to the student."""
-    # NOTE: Replace 'http://your-domain.com' with the actual domain of your frontend
-    verification_url = f"http://your-domain.com/auth/verify?token={token}"
-    msg = MIMEText(f"Please verify your email by clicking the link: {verification_url}")
+    """Sends an email verification link to the student using ZeptoMail."""
+    verification_url = f"{FRONTEND_URL}/auth/verify?token={token}"
+    
+    # Create email message
+    msg = EmailMessage()
     msg['Subject'] = 'Verify Your Email - JKUAT Student Association'
-    msg['From'] = EMAIL_STUDENT
+    msg['From'] = EMAIL_FROM
     msg['To'] = email
+    
+    # Email body with HTML support
+    email_body = f"""
+    <html>
+        <body>
+            <h2>Welcome to JKUAT Student Association!</h2>
+            <p>Thank you for registering. Please verify your email address by clicking the link below:</p>
+            <p><a href="{verification_url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify Email</a></p>
+            <p>Or copy and paste this link into your browser:</p>
+            <p>{verification_url}</p>
+            <p>This link will expire in 24 hours.</p>
+            <br>
+            <p>If you didn't register for this account, please ignore this email.</p>
+            <br>
+            <p>Best regards,<br>JKUAT Student Association Team</p>
+        </body>
+    </html>
+    """
+    
+    msg.set_content(f"Please verify your email by clicking the link: {verification_url}")  # Plain text fallback
+    msg.add_alternative(email_body, subtype='html')  # HTML version
 
     try:
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_STUDENT, EMAIL_PASSWORD)
-            server.send_message(msg)
-        logger.info(f"Verification email sent to {email}")
+        if SMTP_PORT == 465:
+            # SSL connection
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as server:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+        elif SMTP_PORT == 587:
+            # TLS connection
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+        else:
+            raise ValueError("SMTP_PORT must be 465 (SSL) or 587 (TLS)")
+        
+        logger.info(f"Verification email sent successfully to {email}")
     except Exception as e:
         logger.error(f"Failed to send verification email to {email}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to send verification email. Please contact support.")
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to send verification email. Please contact support or try again later."
+        )
 
 async def get_current_student(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> student:
     """Dependency to get the current authenticated student object."""
@@ -217,6 +256,10 @@ async def register_student_route(
 
     # 5. Create student
     verification_token = str(uuid.uuid4())
+    
+    # TEMPORARY: Auto-activate for testing (remove in production)
+    auto_activate = os.getenv("AUTO_ACTIVATE_STUDENTS", "false").lower() == "true"
+    
     db_student = student(
         first_name=student_data.first_name.strip(),
         last_name=student_data.last_name.strip(),
@@ -229,18 +272,23 @@ async def register_student_route(
         year_of_study=student_data.year_of_study,
         # FIX APPLIED HERE: The get_password_hash function now truncates the password internally
         hashed_password=get_password_hash(student_data.password),
-        verification_token=verification_token,
-        is_active=False # Should be False initially
+        verification_token=verification_token if not auto_activate else None,
+        is_active=auto_activate  # Auto-activate if enabled
     )
     db.add(db_student)
     db.commit()
     db.refresh(db_student)
 
-    # 6. Send verification email
-    # Note: If email fails, the user is still created but not active.
-    send_verification_email(db_student.email, verification_token)
-
-    return {"detail": "Student registered successfully. Please check your email for verification link."}
+    # 6. Send verification email (skip if auto-activate is enabled)
+    if not auto_activate:
+        try:
+            send_verification_email(db_student.email, verification_token)
+            return {"detail": "Student registered successfully. Please check your email for verification link."}
+        except HTTPException:
+            # Email sending failed, but student is created
+            return {"detail": "Student registered successfully, but verification email failed. Please contact support."}
+    else:
+        return {"detail": "Student registered and activated successfully. You can now log in."}
 
 @router.get("/verify")
 async def verify_email_route(token: str, db: Session = Depends(get_db)):
