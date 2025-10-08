@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt  # Changed from passlib to direct bcrypt
 from datetime import datetime, timedelta
 from typing import Optional
 import uuid
@@ -35,8 +35,7 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
 EMAIL_STUDENT = os.getenv("EMAIL_STUDENT", "your-email@example.com") # Sender Email
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "your-email-password") # Sender Password
 
-# Initialize password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# REMOVED: pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # This defines the token scheme for the /docs page and is used in the dependency injection
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -51,24 +50,35 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Verifies a plain password against a hash.
     Must use the same truncation as hashing.
     """
-    # Truncate to 72 bytes to match what we did during hashing
-    password_bytes = plain_password.encode('utf-8')[:72]
-    
-    # Verify using bytes
-    return pwd_context.verify(password_bytes, hashed_password)
+    try:
+        # Truncate to 72 bytes to match what we did during hashing
+        password_bytes = plain_password.encode('utf-8')[:72]
+        
+        # Convert stored hash back to bytes for verification
+        hashed_bytes = hashed_password.encode('utf-8')
+        
+        # Verify using bcrypt directly
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
+    except Exception as e:
+        logger.error(f"Password verification error: {str(e)}")
+        return False
 
 def get_password_hash(password: str) -> str:
     """
     Generates a hash for a given password.
     
     CRITICAL FIX: Bcrypt has a 72-BYTE limit.
-    We must pass bytes directly to bcrypt, not a string.
+    Uses bcrypt directly to handle the 72-byte limit properly.
     """
-    # Truncate to 72 bytes BEFORE converting back to string
+    # Truncate to 72 bytes BEFORE hashing
     password_bytes = password.encode('utf-8')[:72]
     
-    # Hash the BYTES directly - this bypasses the string encoding issues
-    return pwd_context.hash(password_bytes)
+    # Generate salt and hash using bcrypt directly
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    
+    # Return as string for database storage
+    return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Creates a JWT access token."""
