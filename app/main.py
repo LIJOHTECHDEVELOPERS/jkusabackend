@@ -11,6 +11,7 @@ from app.models.gallery import Gallery, GalleryCategory
 from app.models.event import Event
 from app.models.resource import Resource
 from app.models.club import Club
+from app.models.student import student
 # Import any other models you have (News, Announcement, etc.)
 
 from app.routers import (
@@ -24,6 +25,7 @@ from app.routers import (
     admin_resource,
     admin_activity,
     admin_club,
+    students_sso
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
@@ -33,6 +35,8 @@ from app.routers.admin_gallery import public_gallery_router
 from app.routers.admin_resource import public_resource_router
 from app.routers.admin_activity import public_activity_router
 from app.routers.admin_club import public_club_router
+
+
 import logging
 
 # Configure logging
@@ -110,6 +114,7 @@ app.include_router(admin_activity.router)
 app.include_router(public_activity_router)
 app.include_router(admin_club.router)
 app.include_router(public_club_router)
+app.include_router(students_sso.router)
 
 @app.get("/")
 def read_root():
