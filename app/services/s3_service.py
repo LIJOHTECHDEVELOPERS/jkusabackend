@@ -17,6 +17,45 @@ class S3Service:
         self.bucket_name = os.getenv('S3_BUCKET_NAME')
         self.base_url = f"https://{self.bucket_name}.s3.{os.getenv('AWS_REGION', 'us-east-1')}.amazonaws.com"
     
+    # -------------------------------------------------------------
+    # NEW METHOD TO FIX THE ERROR
+    # -------------------------------------------------------------
+    def upload_pdf(self, file: UploadFile, folder: str = "documents/pdfs") -> Optional[str]:
+        """
+        Upload a PDF file to S3 and return the URL
+        """
+        try:
+            # Generate unique filename
+            # Enforce .pdf extension for safety, though it should be passed correctly
+            file_extension = 'pdf'
+            unique_filename = f"{uuid.uuid4()}.{file_extension}"
+            
+            # Create S3 key with folder structure
+            s3_key = f"{folder}/{datetime.now().strftime('%Y/%m/%d')}/{unique_filename}"
+            
+            # Upload file to S3
+            self.s3_client.upload_fileobj(
+                file.file,
+                self.bucket_name,
+                s3_key,
+                ExtraArgs={
+                    # Use 'application/pdf' explicitly
+                    'ContentType': 'application/pdf',
+                    'ACL': 'public-read'  # Make file publicly accessible
+                }
+            )
+            
+            # Return the full URL
+            return f"{self.base_url}/{s3_key}"
+            
+        except ClientError as e:
+            print(f"Error uploading PDF to S3: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error uploading PDF: {e}")
+            return None
+    # -------------------------------------------------------------
+
     def upload_image(self, file: UploadFile, folder: str = "news/images") -> Optional[str]:
         """
         Upload an image file to S3 and return the URL
