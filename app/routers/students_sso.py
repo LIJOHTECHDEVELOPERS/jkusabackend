@@ -54,12 +54,16 @@ def get_password_hash(password: str) -> str:
     """
     Generates a hash for a given password.
     
-    CRITICAL FIX: Bcrypt is limited to 72 bytes (characters in most common encodings).
-    The password must be truncated to prevent the ValueError.
+    CRITICAL FIX: Bcrypt has a 72-BYTE limit (not character limit).
+    Must truncate to 72 bytes to prevent ValueError.
     """
-    # Truncate the password to 72 characters before passing it to bcrypt
-    # Bcrypt will only use the first 72 bytes/chars anyway, so this prevents the exception.
-    truncated_password = password[:72] 
+    # Encode to bytes and truncate to 72 bytes
+    password_bytes = password.encode('utf-8')[:72]
+    
+    # Decode back to string, ignoring any incomplete multibyte characters
+    # at the truncation point
+    truncated_password = password_bytes.decode('utf-8', errors='ignore')
+    
     return pwd_context.hash(truncated_password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
