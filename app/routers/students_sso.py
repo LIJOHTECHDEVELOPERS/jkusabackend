@@ -47,24 +47,28 @@ router = APIRouter(prefix="/students/auth", tags=["Authentication & SSO"])
 # ==================== HELPER FUNCTIONS ====================
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against a hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    Verifies a plain password against a hash.
+    Must use the same truncation as hashing.
+    """
+    # Truncate to 72 bytes to match what we did during hashing
+    password_bytes = plain_password.encode('utf-8')[:72]
+    
+    # Verify using bytes
+    return pwd_context.verify(password_bytes, hashed_password)
 
 def get_password_hash(password: str) -> str:
     """
     Generates a hash for a given password.
     
-    CRITICAL FIX: Bcrypt has a 72-BYTE limit (not character limit).
-    Must truncate to 72 bytes to prevent ValueError.
+    CRITICAL FIX: Bcrypt has a 72-BYTE limit.
+    We must pass bytes directly to bcrypt, not a string.
     """
-    # Encode to bytes and truncate to 72 bytes
+    # Truncate to 72 bytes BEFORE converting back to string
     password_bytes = password.encode('utf-8')[:72]
     
-    # Decode back to string, ignoring any incomplete multibyte characters
-    # at the truncation point
-    truncated_password = password_bytes.decode('utf-8', errors='ignore')
-    
-    return pwd_context.hash(truncated_password)
+    # Hash the BYTES directly - this bypasses the string encoding issues
+    return pwd_context.hash(password_bytes)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Creates a JWT access token."""
