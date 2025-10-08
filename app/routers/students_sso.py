@@ -42,7 +42,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # ==================== ROUTER INSTANCE (The FIX for AttributeError) ====================
 # The 'router' variable is required by app.include_router(students_sso.router)
-router = APIRouter(prefix="/auth", tags=["Authentication & SSO"])
+# NEW Initialization
+router = APIRouter(prefix="/students/auth", tags=["Authentication & SSO"])
 
 # ==================== HELPER FUNCTIONS ====================
 
