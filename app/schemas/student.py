@@ -11,7 +11,9 @@ class studentCreate(BaseModel):
     school_id: int
     course: constr(min_length=1, max_length=100)
     year_of_study: int
-    password: constr(min_length=8)
+    # FIX/ENHANCEMENT: Added max_length=72 to prevent the password hashing ValueError 
+    # and provide immediate client-side feedback for overly long passwords.
+    password: constr(min_length=8, max_length=72)
 
 class studentLogin(BaseModel):
     login_id: str  # Email or Registration Number
@@ -30,8 +32,10 @@ class studentResponse(BaseModel):
     is_active: bool
 
     class Config:
-        orm_mode = True
+        # FIX: Pydantic V2 equivalent of orm_mode = True
+        from_attributes = True
 
 class TokenData(BaseModel):
-    user_id: int
+    # FIX: Changed 'user_id' to 'student_id' to match the key used in your JWT creation logic
+    student_id: int
     email: str
