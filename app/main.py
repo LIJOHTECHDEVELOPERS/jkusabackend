@@ -20,14 +20,16 @@ from app.routers import (
     admin_event, 
     admin_news,
     admin_gallery,
-    admin_resources
+    admin_resource,
+    admin_activity
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
 from app.routers.admin_event import public_event_router
 from app.routers.admin_leadership import public_leadership_router
 from app.routers.admin_gallery import public_gallery_router
-from app.routers.admin_resources import public_resource_router
+from app.routers.admin_resource import public_resource_router
+from app.routers.admin_activity import public_activity_router
 import logging
 
 # Configure logging
@@ -99,8 +101,10 @@ app.include_router(admin_news.router)
 app.include_router(public_news_router)
 app.include_router(admin_gallery.router)
 app.include_router(public_gallery_router)
-app.include_router(admin_resources.router)
+app.include_router(admin_resource.router)
 app.include_router(public_resource_router)
+app.include_router(admin_activity.router)
+app.include_router(public_activity_router)
 
 @app.get("/")
 def read_root():
