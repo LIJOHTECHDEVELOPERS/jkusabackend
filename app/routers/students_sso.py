@@ -5,35 +5,47 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
-from app.database import get_db
-from app.models.student import College, School, student # Ensure 'student' is the SQLAlchemy model name
-from app.schemas.student import studentCreate, studentLogin, studentResponse, TokenData
 import uuid
 import os
 import smtplib
 from email.mime.text import MIMEText
 import logging
 
+# --- Assuming these modules and classes are correctly defined and imported ---
+# Note: You should have an 'app/database.py' with 'get_db'
+# Note: You should have 'app/models/student.py' or similar exposing the SQLAlchemy models
+# Note: You should have 'app/schemas/student.py' or similar exposing the Pydantic schemas
+from app.database import get_db
+from app.models.student import College, School, student
+from app.schemas.student import studentCreate, studentLogin, studentResponse, TokenData
+# -------------------------------------------------------------------------
+
+
 logger = logging.getLogger(__name__)
 
-# Configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")  # Replace with secure key in production
+# ==================== CONFIGURATION ====================
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")  # CHANGE THIS!
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 COOKIE_NAME = "access_token"
+
+# Email Configuration (for verification)
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = os.getenv("EMAIL_PORT", 587)
-EMAIL_STUDENT = os.getenv("EMAIL_STUDENT", "your-email@gmail.com")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "your-email-password")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_STUDENT = os.getenv("EMAIL_STUDENT", "your-email@example.com") # Sender Email
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "your-email-password") # Sender Password
 
 # Initialize password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# This defines the token scheme for the /docs page and is used in the dependency injection
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# Router
-auth_router = APIRouter(prefix="/auth", tags=["auth"])
+# ==================== ROUTER INSTANCE (The FIX for AttributeError) ====================
+# The 'router' variable is required by app.include_router(students_sso.router)
+router = APIRouter(prefix="/auth", tags=["Authentication & SSO"])
 
-# Helper Functions
+# ==================== HELPER FUNCTIONS ====================
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifies a plain password against a hash."""
     return pwd_context.verify(plain_password, hashed_password)
@@ -63,17 +75,13 @@ def send_verification_email(email: str, token: str):
     msg['To'] = email
 
     try:
-        # NOTE: Ensure EMAIL_STUDENT and EMAIL_PASSWORD environment variables are set correctly.
-        with smtplib.SMTP(EMAIL_HOST, int(EMAIL_PORT)) as server:
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
             server.starttls()
             server.login(EMAIL_STUDENT, EMAIL_PASSWORD)
             server.send_message(msg)
         logger.info(f"Verification email sent to {email}")
     except Exception as e:
         logger.error(f"Failed to send verification email to {email}: {str(e)}")
-        # Raise HTTP 500 but still commit the user creation in register_student
-        # to allow them to manually retry verification if necessary, 
-        # but for simplicity here, we re-raise the exception.
         raise HTTPException(status_code=500, detail="Failed to send verification email. Please contact support.")
 
 async def get_current_student(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> student:
@@ -93,26 +101,22 @@ async def get_current_student(token: str = Depends(oauth2_scheme), db: Session =
     except JWTError:
         raise credentials_exception
 
-    # FIX: Use the lowercase 'student' model imported from app.models
     db_student = db.query(student).filter(
         student.id == token_data.student_id, 
         student.email == token_data.email
     ).first()
     
-    # FIX: Check against the local variable db_student
     if db_student is None or not db_student.is_active:
         raise credentials_exception
         
     return db_student
 
-# Predefined Colleges and Schools
+# ==================== DATA POPULATION ====================
+
 COLLEGES_SCHOOLS = {
     "COHES": [
-        "School of Nursing",
-        "School of Medicine",
-        "School of Pharmacy",
-        "School of Public Health",
-        "School of Biomedical Sciences"
+        "School of Nursing", "School of Medicine", "School of Pharmacy",
+        "School of Public Health", "School of Biomedical Sciences"
     ],
     "COETEC": [
         "School of Architecture and Building Sciences (SABS)",
@@ -147,25 +151,27 @@ def populate_colleges_schools(db: Session):
             db.add(college)
             db.commit()
             db.refresh(college)
+        
         for school_name in schools:
             school = db.query(School).filter(School.name == school_name, School.college_id == college.id).first()
             if not school:
                 school = School(name=school_name, college_id=college.id)
                 db.add(school)
-        db.commit()
+    db.commit()
 
-# Routes
-@auth_router.post("/register")
-async def register_student(
-    # FIX: Renamed input variable to student_data to avoid shadowing the SQLAlchemy model 'student'
+
+# ==================== ROUTES ====================
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_student_route(
     student_data: studentCreate,
     db: Session = Depends(get_db)
 ):
     """Registers a new student and sends a verification email."""
-    # Initialize colleges and schools if not already populated
+    # 1. Initialize colleges and schools if not already populated (only runs on first request)
     populate_colleges_schools(db)
 
-    # Validate college and school IDs against the data
+    # 2. Validate college and school IDs
     college = db.query(College).filter(College.id == student_data.college_id).first()
     if not college:
         raise HTTPException(status_code=400, detail="Invalid college ID")
@@ -173,18 +179,17 @@ async def register_student(
     if not school:
         raise HTTPException(status_code=400, detail="Invalid school ID or school does not belong to the selected college")
 
-    # Validate year of study
+    # 3. Validate year of study
     if student_data.year_of_study < 1 or student_data.year_of_study > 6:
         raise HTTPException(status_code=400, detail="Year of study must be between 1 and 6")
 
-    # Check for existing email or registration number
-    # FIX: Compare student model fields against student_data fields, ensuring case consistency
+    # 4. Check for existing email or registration number
     if db.query(student).filter(student.email == student_data.email.lower()).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     if db.query(student).filter(student.registration_number == student_data.registration_number.upper()).first():
         raise HTTPException(status_code=400, detail="Registration number already registered")
 
-    # Create student
+    # 5. Create student
     verification_token = str(uuid.uuid4())
     db_student = student(
         first_name=student_data.first_name.strip(),
@@ -197,19 +202,21 @@ async def register_student(
         course=student_data.course.strip(),
         year_of_study=student_data.year_of_study,
         hashed_password=get_password_hash(student_data.password),
-        verification_token=verification_token
+        verification_token=verification_token,
+        is_active=False # Should be False initially
     )
     db.add(db_student)
     db.commit()
     db.refresh(db_student)
 
-    # Send verification email
-    send_verification_email(student_data.email, verification_token)
+    # 6. Send verification email
+    # Note: If email fails, the user is still created but not active.
+    send_verification_email(db_student.email, verification_token)
 
     return {"detail": "Student registered successfully. Please check your email for verification link."}
 
-@auth_router.get("/verify")
-async def verify_email(token: str, db: Session = Depends(get_db)):
+@router.get("/verify")
+async def verify_email_route(token: str, db: Session = Depends(get_db)):
     """Verifies a student's email using the token provided in the link."""
     db_student = db.query(student).filter(student.verification_token == token).first()
     if not db_student:
@@ -220,20 +227,21 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
     db.commit()
     return {"detail": "Email verified successfully. You can now log in."}
 
-@auth_router.post("/login")
-async def login_student(
+@router.post("/login")
+async def login_student_route(
     response: Response,
     login_data: studentLogin,
     db: Session = Depends(get_db)
 ):
     """Authenticates a student via email/registration number and password, setting an HTTP-only cookie."""
     
-    # Attempt to find the student using either lowercase email or uppercase registration number
+    # 1. Attempt to find the student using either lowercase email or uppercase registration number
     db_student = db.query(student).filter(
         (student.email == login_data.login_id.lower()) | 
         (student.registration_number == login_data.login_id.upper())
     ).first()
 
+    # 2. Authentication and Status Checks
     if not db_student or not verify_password(login_data.password, db_student.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -247,32 +255,32 @@ async def login_student(
             detail="Account not verified. Please check your email for verification link."
         )
 
-    # Create and set the access token
+    # 3. Create and set the access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"student_id": db_student.id, "email": db_student.email},
         expires_delta=access_token_expires
     )
     
-    # Set HTTP-only cookie
+    # 4. Set HTTP-only cookie
     response.set_cookie(
         key=COOKIE_NAME,
         value=access_token,
         httponly=True,
-        secure=True,  # IMPORTANT: Should be True in production with HTTPS
+        secure=True,  # IMPORTANT: Use True only with HTTPS
         samesite="lax",
         max_age=int(access_token_expires.total_seconds())
     )
     
     return {"detail": "Login successful", "student": studentResponse.from_orm(db_student)}
 
-@auth_router.post("/logout")
-async def logout_student(response: Response):
+@router.post("/logout")
+async def logout_student_route(response: Response):
     """Deletes the authentication cookie to log the student out."""
     response.delete_cookie(COOKIE_NAME)
     return {"detail": "Logout successful"}
 
-@auth_router.get("/me", response_model=studentResponse)
-async def get_current_student_details(current_student: student = Depends(get_current_student)):
+@router.get("/me", response_model=studentResponse)
+async def get_current_student_details_route(current_student: student = Depends(get_current_student)):
     """Returns the details of the currently authenticated student."""
     return current_student
