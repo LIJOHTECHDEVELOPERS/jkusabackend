@@ -40,9 +40,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # This defines the token scheme for the /docs page and is used in the dependency injection
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# ==================== ROUTER INSTANCE (The FIX for AttributeError) ====================
+# ==================== ROUTER INSTANCE ====================
 # The 'router' variable is required by app.include_router(students_sso.router)
-# NEW Initialization
 router = APIRouter(prefix="/students/auth", tags=["Authentication & SSO"])
 
 # ==================== HELPER FUNCTIONS ====================
@@ -52,8 +51,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    """Generates a hash for a given password."""
-    return pwd_context.hash(password)
+    """
+    Generates a hash for a given password.
+    
+    CRITICAL FIX: Bcrypt is limited to 72 bytes (characters in most common encodings).
+    The password must be truncated to prevent the ValueError.
+    """
+    # Truncate the password to 72 characters before passing it to bcrypt
+    # Bcrypt will only use the first 72 bytes/chars anyway, so this prevents the exception.
+    truncated_password = password[:72] 
+    return pwd_context.hash(truncated_password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Creates a JWT access token."""
@@ -202,6 +209,7 @@ async def register_student_route(
         school_id=student_data.school_id,
         course=student_data.course.strip(),
         year_of_study=student_data.year_of_study,
+        # FIX APPLIED HERE: The get_password_hash function now truncates the password internally
         hashed_password=get_password_hash(student_data.password),
         verification_token=verification_token,
         is_active=False # Should be False initially
