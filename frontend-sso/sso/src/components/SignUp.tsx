@@ -13,7 +13,6 @@ import {
   EyeIcon, 
   EyeSlashIcon, 
   CheckCircleIcon,
-  AcademicCapIcon,
   ShieldCheckIcon,
   CheckIcon,
   ArrowLeftIcon,
@@ -32,11 +31,13 @@ interface School {
   college_id: number
 }
 
-// Logo Component
+// Logo Component - Updated to use actual JKUSA logo
 const JKUSALogo = ({ className = "w-16 h-16" }: { className?: string }) => (
-  <div className={`bg-blue-600 rounded-full flex items-center justify-center ${className}`}>
-    <AcademicCapIcon className="w-8 h-8 text-white" />
-  </div>
+  <img
+    src="images/logo.jpg"
+    alt="JKUSA Logo"
+    className={className}
+  />
 )
 
 const SignUp: FC = () => {
@@ -330,7 +331,7 @@ const SignUp: FC = () => {
               <JKUSALogo />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">JKUSA Portal</h1>
-                <p className="text-xs text-gray-600">Student Management System</p>
+                <p className="text-xs text-gray-600">The Jkuat Student's Community</p>
               </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-900">Create Your Account</h2>

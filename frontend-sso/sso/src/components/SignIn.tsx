@@ -4,33 +4,35 @@ import { useAuth } from '../context/AuthContext'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Alert from './ui/Alert'
-import { 
-  EnvelopeIcon, 
-  LockClosedIcon, 
-  EyeIcon, 
-  EyeSlashIcon, 
-  AcademicCapIcon,
+import {
+  EnvelopeIcon,
+  LockClosedIcon,
+  EyeIcon,
+  EyeSlashIcon,
   ShieldCheckIcon,
   CheckIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
 
 // Logo Component
 const JKUSALogo = ({ className = "w-16 h-16" }: { className?: string }) => (
-  <div className={`bg-blue-600 rounded-full flex items-center justify-center ${className}`}>
-    <AcademicCapIcon className="w-8 h-8 text-white" />
-  </div>
+  <img
+    src="images/logo.jpg"
+    alt="JKUSA Logo"
+    className={className}
+  />
 )
 
 // OTP Input Component
-const OTPInput = ({ 
-  otp, 
-  setOtp, 
-  error 
-}: { 
+const OTPInput = ({
+  otp,
+  setOtp,
+  error
+}: {
   otp: string[]
   setOtp: (otp: string[]) => void
-  error?: string 
+  error?: string
 }) => {
   return (
     <div className="space-y-2">
@@ -85,7 +87,7 @@ const SignIn: FC = () => {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  
+
   // Form state
   const [currentStep, setCurrentStep] = useState<'signin' | 'verify'>('signin')
   const [formData, setFormData] = useState({ login_id: '', password: '' })
@@ -96,6 +98,8 @@ const SignIn: FC = () => {
   const [successMessage, setSuccessMessage] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
   const [verificationAttempts, setVerificationAttempts] = useState(0)
+  const [studentInfo, setStudentInfo] = useState<{ email: string; name: string } | null>(null)
+  const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null)
 
   // Extract URL parameters
   const returnType = searchParams.get('return')
@@ -113,24 +117,65 @@ const SignIn: FC = () => {
     e.preventDefault()
     setError('')
     setSuccessMessage('')
+    setAttemptsRemaining(null)
     setLoading(true)
-
+    
     try {
       await login(formData.login_id, formData.password)
-      
-      // Check if email verification is required
-      // If verification required, switch to verify step
-      // Otherwise navigate to dashboard
-      navigate('/dashboard')
+      // Show success message
+      setSuccessMessage('Login successful! Redirecting to dashboard...')
+      setTimeout(() => {
+        navigate('/dashboard')
+      }, 1000)
     } catch (err: any) {
-      // Check if error is due to unverified email
-      if (err.code === 'EMAIL_NOT_VERIFIED' || 
-          err.message?.toLowerCase().includes('verify your email')) {
-        setCurrentStep('verify')
-        setResendCooldown(60)
-        setError('Your email is not verified. We\'ve sent a verification code to your email.')
+      // Handle different error codes from backend
+      const errorData = err.response?.data?.detail || err.response?.data || {}
+      
+      if (typeof errorData === 'object') {
+        const { code, message, email, student_name, email_sent, attempts_remaining, minutes_remaining } = errorData
+        
+        switch (code) {
+          case 'EMAIL_NOT_VERIFIED':
+            // Auto-transition to verification step
+            setStudentInfo({
+              email: email || formData.login_id,
+              name: student_name || 'Student'
+            })
+            setCurrentStep('verify')
+            setResendCooldown(60)
+            if (email_sent) {
+              setSuccessMessage('A verification code has been sent to your email. Please check your inbox.')
+            } else {
+              setError('Could not send verification email. Please try again or contact support.')
+            }
+            break
+            
+          case 'INVALID_CREDENTIALS':
+            if (attempts_remaining !== undefined) {
+              setAttemptsRemaining(attempts_remaining)
+              setError(message || `Invalid credentials. ${attempts_remaining} attempt${attempts_remaining !== 1 ? 's' : ''} remaining.`)
+            } else {
+              setError(message || 'Invalid email/registration number or password.')
+            }
+            break
+            
+          case 'ACCOUNT_LOCKED':
+            if (minutes_remaining) {
+              setError(message || `Account temporarily locked. Try again in ${minutes_remaining} minute${minutes_remaining !== 1 ? 's' : ''}.`)
+            } else {
+              setError(message || 'Account is temporarily locked. Please try again later.')
+            }
+            break
+            
+          case 'RATE_LIMIT_EXCEEDED':
+            setError(message || 'Too many login attempts. Please wait a moment and try again.')
+            break
+            
+          default:
+            setError(message || 'Login failed. Please check your credentials and try again.')
+        }
       } else {
-        setError(err.message || 'Login failed')
+        setError(typeof errorData === 'string' ? errorData : 'Login failed. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -140,33 +185,51 @@ const SignIn: FC = () => {
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault()
     const otpString = otp.join('')
-
+    
     if (otpString.length !== 6) {
       setError('Please enter the complete 6-digit verification code')
       return
     }
-
+    
     if (!/^\d{6}$/.test(otpString)) {
       setError('Verification code must contain only numbers')
       return
     }
-
+    
     setLoading(true)
     setError('')
-
+    
     try {
-      // Call your verify email API here
-      // await verifyEmail(formData.login_id, otpString)
+      // Call your verification endpoint here
+      // const response = await verifyEmail(otpString)
       
-      setSuccessMessage('Email verified successfully!')
+      setSuccessMessage('Email verified successfully! Redirecting...')
       setTimeout(() => {
-        navigate('/dashboard')
+        // Try to login again after verification
+        handleSubmit(e)
       }, 2000)
     } catch (err: any) {
-      if (err.code === 'INVALID_OTP') {
-        setVerificationAttempts(prev => prev + 1)
+      const errorData = err.response?.data?.detail || err.response?.data || {}
+      
+      if (typeof errorData === 'object') {
+        const { code, message } = errorData
+        
+        switch (code) {
+          case 'INVALID_OTP':
+            setVerificationAttempts(prev => prev + 1)
+            setError(message || 'Invalid verification code. Please try again.')
+            break
+            
+          case 'TOKEN_EXPIRED':
+            setError(message || 'Verification code has expired. Please request a new one.')
+            break
+            
+          default:
+            setError(message || 'Verification failed. Please try again.')
+        }
+      } else {
+        setError('Verification failed. Please try again.')
       }
-      setError(err.message || 'Verification failed')
     } finally {
       setLoading(false)
     }
@@ -174,20 +237,29 @@ const SignIn: FC = () => {
 
   const handleResendOTP = async () => {
     if (resendCooldown > 0) return
-
+    
     setLoading(true)
     setError('')
-
+    setSuccessMessage('')
+    
     try {
-      // Call your resend verification API here
-      // await resendVerification(formData.login_id)
+      // Call your resend verification endpoint here
+      // const response = await resendVerification(studentInfo?.email || formData.login_id)
       
       setResendCooldown(60)
       setOtp(['', '', '', '', '', ''])
       setVerificationAttempts(0)
       setSuccessMessage('New verification code sent to your email!')
+      
+      setTimeout(() => setSuccessMessage(''), 3000)
     } catch (err: any) {
-      setError('Failed to resend verification code. Please try again.')
+      const errorData = err.response?.data?.detail || err.response?.data || {}
+      
+      if (typeof errorData === 'object') {
+        setError(errorData.message || 'Failed to resend verification code. Please try again.')
+      } else {
+        setError('Failed to resend verification code. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -200,6 +272,8 @@ const SignIn: FC = () => {
     setOtp(['', '', '', '', '', ''])
     setVerificationAttempts(0)
     setResendCooldown(0)
+    setStudentInfo(null)
+    setAttemptsRemaining(null)
   }
 
   // Sign-In Step
@@ -230,7 +304,7 @@ const SignIn: FC = () => {
                 <JKUSALogo />
                 <div>
                   <h1 className="text-xl font-bold text-gray-900">JKUSA Portal</h1>
-                  <p className="text-xs text-gray-600">Student Management System</p>
+                  <p className="text-xs text-gray-600">Jkuat Student's Network</p>
                 </div>
               </div>
               <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
@@ -242,7 +316,17 @@ const SignIn: FC = () => {
             {/* Error Alert */}
             {error && (
               <Alert type="error" onClose={() => setError('')}>
-                {error}
+                <div className="flex items-start space-x-2">
+                  <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p>{error}</p>
+                    {attemptsRemaining !== null && attemptsRemaining > 0 && (
+                      <div className="mt-2 text-xs bg-orange-100 text-orange-800 px-3 py-2 rounded">
+                        <strong>Security Alert:</strong> {attemptsRemaining} attempt{attemptsRemaining !== 1 ? 's' : ''} remaining before account lockout
+                      </div>
+                    )}
+                  </div>
+                </div>
               </Alert>
             )}
 
@@ -264,8 +348,10 @@ const SignIn: FC = () => {
                 onChange={(e) => {
                   setFormData({ ...formData, login_id: e.target.value })
                   setError('')
+                  setAttemptsRemaining(null)
                 }}
                 required
+                disabled={loading}
               />
 
               <div className="relative">
@@ -278,13 +364,16 @@ const SignIn: FC = () => {
                   onChange={(e) => {
                     setFormData({ ...formData, password: e.target.value })
                     setError('')
+                    setAttemptsRemaining(null)
                   }}
                   required
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-11 text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeSlashIcon className="w-5 h-5" />
@@ -296,23 +385,25 @@ const SignIn: FC = () => {
 
               <div className="flex items-center justify-between">
                 <label className="flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    disabled={loading}
                   />
                   <span className="ml-2 text-sm text-gray-600">Remember me</span>
                 </label>
-                <button 
-                  type="button" 
-                  onClick={() => navigate('/forgot-password')} 
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
                   className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                  disabled={loading}
                 >
                   Forgot password?
                 </button>
               </div>
 
-              <Button loading={loading} className="w-full">
-                Sign In
+              <Button loading={loading} className="w-full" disabled={loading}>
+                {loading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
 
@@ -324,10 +415,19 @@ const SignIn: FC = () => {
                   type="button"
                   onClick={() => navigate('/signup')}
                   className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                  disabled={loading}
                 >
                   Register here
                 </button>
               </p>
+            </div>
+
+            {/* Security Notice */}
+            <div className="text-center mt-6">
+              <div className="inline-flex items-center space-x-2 text-xs text-gray-500">
+                <ShieldCheckIcon className="h-4 w-4" />
+                <span>Secured with enterprise-grade encryption</span>
+              </div>
             </div>
           </div>
         </div>
@@ -347,7 +447,7 @@ const SignIn: FC = () => {
               <div className="grid grid-cols-1 gap-4 text-left">
                 <div className="flex items-center space-x-3">
                   <CheckIcon className="h-5 w-5 text-green-400 flex-shrink-0" />
-                  <span className="text-sm">Two-factor authentication</span>
+                  <span className="text-sm">Email verification system</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <CheckIcon className="h-5 w-5 text-green-400 flex-shrink-0" />
@@ -355,7 +455,7 @@ const SignIn: FC = () => {
                 </div>
                 <div className="flex items-center space-x-3">
                   <CheckIcon className="h-5 w-5 text-green-400 flex-shrink-0" />
-                  <span className="text-sm">24/7 account monitoring</span>
+                  <span className="text-sm">Account lockout protection</span>
                 </div>
               </div>
             </div>
@@ -371,27 +471,50 @@ const SignIn: FC = () => {
       {/* Left Side - Verification Form */}
       <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-gray-50 to-white">
         <div className="w-full max-w-md space-y-6">
+          {/* Back Button */}
+          <button
+            onClick={handleBackToSignin}
+            className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-4 text-sm transition-colors"
+            disabled={loading}
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+            <span>Back to sign in</span>
+          </button>
+
           {/* Header */}
           <div className="text-center space-y-2">
-            <button
-              onClick={handleBackToSignin}
-              className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-4 text-sm transition-colors"
-            >
-              <ArrowLeftIcon className="h-4 w-4" />
-              <span>Back to sign in</span>
-            </button>
-
             <div className="flex items-center justify-center space-x-3 mb-4">
               <JKUSALogo />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">JKUSA Portal</h1>
-                <p className="text-xs text-gray-600">Student Management System</p>
+                <p className="text-xs text-gray-600">The Jkuat Student's Community</p>
               </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-900">Verify your email</h2>
             <p className="text-gray-600 text-sm">
-              Enter the 6-digit code sent to <span className="font-medium text-gray-900">{formData.login_id}</span>
+              We've sent a verification code to{' '}
+              <span className="font-medium text-gray-900">
+                {studentInfo?.email || formData.login_id}
+              </span>
             </p>
+            {studentInfo?.name && (
+              <p className="text-sm text-blue-600">
+                Welcome, {studentInfo.name}!
+              </p>
+            )}
+          </div>
+
+          {/* Auto-verification Notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <EnvelopeIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-sm text-blue-800">
+                <p className="font-medium">Email verification required</p>
+                <p className="mt-1 text-blue-700">
+                  Your account needs to be verified before you can sign in. Check your inbox for the verification code.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Success Message */}
@@ -419,10 +542,10 @@ const SignIn: FC = () => {
 
             <Button
               loading={loading}
-              disabled={otp.join('').length !== 6}
+              disabled={otp.join('').length !== 6 || loading}
               className="w-full"
             >
-              Verify & Sign In
+              {loading ? 'Verifying...' : 'Verify & Sign In'}
             </Button>
           </form>
 
@@ -439,7 +562,7 @@ const SignIn: FC = () => {
                   type="button"
                   onClick={handleResendOTP}
                   disabled={loading}
-                  className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center space-x-1 transition-colors"
+                  className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center space-x-1 transition-colors disabled:opacity-50"
                 >
                   <span>Resend Code</span>
                 </button>
@@ -447,16 +570,33 @@ const SignIn: FC = () => {
             </div>
 
             {verificationAttempts > 0 && verificationAttempts < 5 && (
-              <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
-                {5 - verificationAttempts} attempts remaining
+              <div className="text-xs text-orange-600 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                <div className="flex items-center justify-center space-x-2">
+                  <ExclamationTriangleIcon className="h-4 w-4" />
+                  <span>{5 - verificationAttempts} attempts remaining</span>
+                </div>
               </div>
             )}
 
             {verificationAttempts >= 5 && (
-              <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
-                Too many failed attempts. Please try signing in again.
+              <div className="text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-200">
+                <div className="flex items-center justify-center space-x-2">
+                  <ExclamationTriangleIcon className="h-4 w-4" />
+                  <span>Too many failed attempts. Please try signing in again.</span>
+                </div>
               </div>
             )}
+          </div>
+
+          {/* Help Section */}
+          <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
+            <p className="font-medium text-gray-900 mb-2">Need help?</p>
+            <ul className="space-y-1 text-xs">
+              <li>• Check your spam or junk folder</li>
+              <li>• Make sure you're checking the correct email</li>
+              <li>• Wait a minute and try resending the code</li>
+              <li>• Contact support if the issue persists</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -489,8 +629,9 @@ const SignIn: FC = () => {
                 </div>
               </div>
             </div>
-            <div className="text-sm text-blue-100 opacity-90">
-              <p>Tip: Check your spam folder if you don't see the email</p>
+            <div className="text-sm text-blue-100 opacity-90 bg-white/5 rounded-lg p-3">
+              <p className="font-medium mb-1">Pro Tip:</p>
+              <p>Add no-reply@jkusa.ac.ke to your contacts to ensure you receive future notifications.</p>
             </div>
           </div>
         </div>

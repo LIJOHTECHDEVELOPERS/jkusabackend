@@ -1,18 +1,3 @@
-"""
-Production-Ready Authentication & SSO Router for JKUSA
-File: app/routers/students_sso.py
-
-Features:
-- Rate limiting
-- Password strength validation
-- Account lockout after failed attempts
-- Password reset functionality
-- Secure token handling
-- Comprehensive logging
-- Input sanitization
-- CSRF protection ready
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -85,22 +70,15 @@ class RateLimiter:
         self.lock = Lock()
     
     def is_allowed(self, identifier: str, max_requests: int, window_seconds: int) -> bool:
-        """Check if request is allowed under rate limit"""
         with self.lock:
             now = datetime.utcnow()
             cutoff = now - timedelta(seconds=window_seconds)
-            
-            # Clean old requests
             self.requests[identifier] = [
                 req_time for req_time in self.requests[identifier]
                 if req_time > cutoff
             ]
-            
-            # Check limit
             if len(self.requests[identifier]) >= max_requests:
                 return False
-            
-            # Add current request
             self.requests[identifier].append(now)
             return True
 
@@ -111,7 +89,6 @@ class LoginAttemptTracker:
         self.lock = Lock()
     
     def record_failed_attempt(self, identifier: str):
-        """Record a failed login attempt"""
         with self.lock:
             self.attempts[identifier]["count"] += 1
             if self.attempts[identifier]["count"] >= MAX_LOGIN_ATTEMPTS:
@@ -121,20 +98,21 @@ class LoginAttemptTracker:
                 logger.warning(f"Account locked due to failed attempts: {identifier}")
     
     def is_locked(self, identifier: str) -> tuple[bool, Optional[datetime]]:
-        """Check if account is locked"""
         with self.lock:
             locked_until = self.attempts[identifier]["locked_until"]
             if locked_until and locked_until > datetime.utcnow():
                 return True, locked_until
-            # Reset if lockout period passed
             if locked_until:
                 self.attempts[identifier] = {"count": 0, "locked_until": None}
             return False, None
     
     def reset_attempts(self, identifier: str):
-        """Reset login attempts after successful login"""
         with self.lock:
             self.attempts[identifier] = {"count": 0, "locked_until": None}
+    
+    def get_remaining_attempts(self, identifier: str) -> int:
+        with self.lock:
+            return MAX_LOGIN_ATTEMPTS - self.attempts[identifier]["count"]
 
 # Initialize security components
 rate_limiter = RateLimiter()
@@ -147,29 +125,23 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     Validate password meets security requirements.
     Returns (is_valid, error_message)
     """
+    if not password:
+        return False, "Password cannot be empty"
     if len(password) < 8:
         return False, "Password must be at least 8 characters long"
-    
     if len(password) > 128:
         return False, "Password must not exceed 128 characters"
-    
     if not re.search(r"[a-z]", password):
         return False, "Password must contain at least one lowercase letter"
-    
     if not re.search(r"[A-Z]", password):
         return False, "Password must contain at least one uppercase letter"
-    
     if not re.search(r"\d", password):
         return False, "Password must contain at least one number"
-    
     if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
         return False, "Password must contain at least one special character (!@#$%^&*(),.?\":{}|<>)"
-    
-    # Check for common passwords (basic check)
     common_passwords = ["password", "12345678", "qwerty", "admin", "letmein"]
     if password.lower() in common_passwords:
         return False, "Password is too common. Please choose a stronger password"
-    
     return True, ""
 
 # ==================== HELPER FUNCTIONS ====================
@@ -187,51 +159,68 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """Generates a hash for a given password."""
     password_bytes = password.encode('utf-8')[:72]
-    salt = bcrypt.gensalt(rounds=12)  # Increased rounds for production
+    salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password_bytes, salt)
     return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Creates a JWT access token."""
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire, "type": "access"})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def create_refresh_token(data: dict) -> str:
     """Creates a JWT refresh token."""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def sanitize_input(input_str: str) -> str:
     """Sanitize user input to prevent injection attacks."""
     if not input_str:
-        return input_str
-    # Remove null bytes
-    sanitized = input_str.replace('\x00', '')
-    # Strip whitespace
-    sanitized = sanitized.strip()
+        return ""
+    sanitized = input_str.replace('\x00', '').strip()
     return sanitized
 
 def get_client_ip(request: Request) -> str:
     """Get client IP address from request."""
-    # Check for proxy headers first
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
-    
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
         return real_ip
-    
     return request.client.host if request.client else "unknown"
+
+def validate_token_expiry(token_expiry: datetime, email: str) -> None:
+    """Validate token expiry with consistent timezone handling."""
+    current_time = datetime.utcnow()
+    if token_expiry.tzinfo is None:
+        if token_expiry < current_time:
+            logger.warning(f"Expired token for: {email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "The link has expired. Please request a new one.",
+                    "code": "TOKEN_EXPIRED"
+                }
+            )
+    else:
+        from datetime import timezone
+        current_time_aware = current_time.replace(tzinfo=timezone.utc)
+        if token_expiry < current_time_aware:
+            logger.warning(f"Expired token for: {email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "The link has expired. Please request a new one.",
+                    "code": "TOKEN_EXPIRED"
+                }
+            )
 
 async def get_current_student(
     token: str = Depends(oauth2_scheme), 
@@ -240,22 +229,21 @@ async def get_current_student(
     """Dependency to get the current authenticated student object."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail={
+            "success": False,
+            "message": "Could not validate credentials. Please sign in again.",
+            "code": "INVALID_CREDENTIALS"
+        },
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        
-        # Verify token type
         if payload.get("type") != "access":
             raise credentials_exception
-        
         student_id: int = payload.get("student_id")
         email: str = payload.get("email")
-        
         if student_id is None or email is None:
             raise credentials_exception
-            
         token_data = TokenData(student_id=student_id, email=email)
     except JWTError as e:
         logger.warning(f"JWT validation failed: {str(e)}")
@@ -273,7 +261,11 @@ async def get_current_student(
     if not db_student.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is not active"
+            detail={
+                "success": False,
+                "message": "Account not verified. Please check your email for the verification link.",
+                "code": "EMAIL_NOT_VERIFIED"
+            }
         )
         
     return db_student
@@ -328,11 +320,19 @@ def populate_colleges_schools(db: Session):
                 if not school:
                     school = School(name=school_name, college_id=college.id)
                     db.add(school)
+                    db.commit()
         db.commit()
     except Exception as e:
         logger.error(f"Error populating colleges/schools: {str(e)}")
         db.rollback()
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred while initializing data",
+                "code": "SERVER_ERROR"
+            }
+        )
 
 # ==================== ROUTES ====================
 
@@ -343,8 +343,6 @@ async def register_student_route(
     db: Session = Depends(get_db)
 ):
     """Registers a new student with comprehensive validation and security checks."""
-    
-    # Rate limiting
     client_ip = get_client_ip(request)
     if not rate_limiter.is_allowed(
         f"register:{client_ip}", 
@@ -354,34 +352,84 @@ async def register_student_route(
         logger.warning(f"Rate limit exceeded for registration from IP: {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many registration attempts. Please try again later."
+            detail={
+                "success": False,
+                "message": "Too many registration attempts. Please wait a minute and try again.",
+                "code": "RATE_LIMIT_EXCEEDED"
+            }
         )
     
     try:
-        # 1. Initialize colleges and schools
         populate_colleges_schools(db)
 
-        # 2. Input sanitization
+        # Input sanitization
         student_data.first_name = sanitize_input(student_data.first_name)
         student_data.last_name = sanitize_input(student_data.last_name)
         student_data.email = sanitize_input(student_data.email)
         student_data.course = sanitize_input(student_data.course)
         student_data.registration_number = sanitize_input(student_data.registration_number)
+        student_data.phone_number = sanitize_input(student_data.phone_number) if student_data.phone_number else None
 
-        # 3. Validate password strength
+        # Validate required fields
+        if not all([student_data.first_name, student_data.last_name, student_data.email, 
+                   student_data.registration_number, student_data.course]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "All required fields must be provided",
+                    "code": "MISSING_FIELDS"
+                }
+            )
+
+        # Validate password strength
         is_valid, error_msg = validate_password_strength(student_data.password)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": error_msg,
+                    "code": "WEAK_PASSWORD"
+                }
+            )
 
-        # 4. Validate email format
+        # Validate email format
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         if not re.match(email_regex, student_data.email):
-            raise HTTPException(status_code=400, detail="Invalid email format")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Please enter a valid email address",
+                    "code": "INVALID_EMAIL"
+                }
+            )
 
-        # 5. Validate college and school IDs
+        # Validate phone number format if provided
+        if student_data.phone_number:
+            phone_regex = r'^\+?1?\d{9,15}$'
+            if not re.match(phone_regex, student_data.phone_number):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "success": False,
+                        "message": "Invalid phone number format",
+                        "code": "INVALID_PHONE"
+                    }
+                )
+
+        # Validate college and school IDs
         college = db.query(College).filter(College.id == student_data.college_id).first()
         if not college:
-            raise HTTPException(status_code=400, detail="Invalid college ID")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Please select a valid college",
+                    "code": "INVALID_COLLEGE"
+                }
+            )
         
         school = db.query(School).filter(
             School.id == student_data.school_id, 
@@ -389,15 +437,26 @@ async def register_student_route(
         ).first()
         if not school:
             raise HTTPException(
-                status_code=400, 
-                detail="Invalid school ID or school does not belong to the selected college"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Please select a valid school that belongs to your college",
+                    "code": "INVALID_SCHOOL"
+                }
             )
 
-        # 6. Validate year of study
+        # Validate year of study
         if student_data.year_of_study < 1 or student_data.year_of_study > 6:
-            raise HTTPException(status_code=400, detail="Year of study must be between 1 and 6")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Year of study must be between 1 and 6",
+                    "code": "INVALID_YEAR"
+                }
+            )
 
-        # 7. Check for existing email or registration number
+        # Check for existing email or registration number
         email_lower = student_data.email.lower()
         reg_number_upper = student_data.registration_number.upper()
         
@@ -408,11 +467,25 @@ async def register_student_route(
         
         if existing_student:
             if existing_student.email == email_lower:
-                raise HTTPException(status_code=400, detail="Email already registered")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "success": False,
+                        "message": "This email is already registered. Please sign in or use a different email.",
+                        "code": "EMAIL_EXISTS"
+                    }
+                )
             else:
-                raise HTTPException(status_code=400, detail="Registration number already registered")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "success": False,
+                        "message": "This registration number is already in use. Please contact support.",
+                        "code": "REG_NUMBER_EXISTS"
+                    }
+                )
 
-        # 8. Create student
+        # Create student
         verification_token = str(uuid.uuid4())
         token_expiry = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
         
@@ -439,7 +512,7 @@ async def register_student_route(
         
         logger.info(f"New student registered: {db_student.email} (ID: {db_student.id})")
 
-        # 9. Send verification email
+        # Send verification email
         try:
             user_name = f"{db_student.first_name} {db_student.last_name}"
             success = send_verification_email(
@@ -448,24 +521,21 @@ async def register_student_route(
                 token=verification_token
             )
             
-            if success:
-                return {
-                    "detail": "Registration successful! Please check your email to verify your account.",
-                    "email_sent": True
-                }
-            else:
-                logger.error(f"Failed to send verification email to {db_student.email}")
-                return {
-                    "detail": "Registration successful, but verification email failed. Please contact support.",
-                    "email_sent": False,
-                    "support_contact": True
-                }
-        except Exception as e:
-            logger.error(f"Unexpected error sending verification email: {str(e)}")
             return {
-                "detail": "Registration successful, but verification email failed. Please contact support.",
+                "success": True,
+                "message": "Registration successful! Please check your email to verify your account.",
+                "email": db_student.email,
+                "email_sent": success,
+                "code": "REGISTRATION_SUCCESS"
+            }
+        except Exception as e:
+            logger.error(f"Failed to send verification email: {str(e)}")
+            return {
+                "success": True,
+                "message": "Registration successful, but we couldn't send the verification email. Please contact support.",
+                "email": db_student.email,
                 "email_sent": False,
-                "support_contact": True
+                "code": "EMAIL_SEND_FAILED"
             }
             
     except HTTPException:
@@ -474,19 +544,29 @@ async def register_student_route(
         logger.error(f"Registration error: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred during registration. Please try again later."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An unexpected error occurred during registration. Please try again.",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.get("/verify")
 async def verify_email_route(token: str, db: Session = Depends(get_db)):
     """Verifies a student's email using the token provided in the link."""
     try:
-        # Sanitize token
         token = sanitize_input(token)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Verification token is required",
+                    "code": "MISSING_TOKEN"
+                }
+            )
         
-        # Find student with this token
         db_student = db.query(student).filter(
             student.verification_token == token
         ).first()
@@ -494,40 +574,26 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
         if not db_student:
             logger.warning(f"Invalid verification token attempted: {token[:10]}...")
             raise HTTPException(
-                status_code=400, 
-                detail="Invalid or expired verification token"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Invalid verification link. Please request a new verification email.",
+                    "code": "INVALID_TOKEN"
+                }
             )
         
-        # Check if token has expired (handle both timezone-aware and naive datetimes)
+        # Check token expiry
         if db_student.verification_token_expiry:
-            current_time = datetime.utcnow()
-            token_expiry = db_student.verification_token_expiry
-            
-            # Make both timezone-aware for comparison
-            if token_expiry.tzinfo is None:
-                # Token expiry is naive, compare with naive current time
-                if token_expiry < current_time:
-                    logger.warning(f"Expired verification token for: {db_student.email}")
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Verification token has expired. Please request a new verification email."
-                    )
-            else:
-                # Token expiry is aware, make current time aware
-                from datetime import timezone
-                current_time_aware = current_time.replace(tzinfo=timezone.utc)
-                if token_expiry < current_time_aware:
-                    logger.warning(f"Expired verification token for: {db_student.email}")
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Verification token has expired. Please request a new verification email."
-                    )
+            validate_token_expiry(db_student.verification_token_expiry, db_student.email)
         
-        # Check if already verified
         if db_student.is_active:
-            return {"detail": "Email already verified. You can log in to your account."}
+            return {
+                "success": True,
+                "message": "Your email is already verified. You can sign in now.",
+                "code": "ALREADY_VERIFIED",
+                "already_verified": True
+            }
         
-        # Activate the account
         db_student.is_active = True
         db_student.verification_token = None
         db_student.verification_token_expiry = None
@@ -536,7 +602,6 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
         
         logger.info(f"Email verified successfully: {db_student.email}")
         
-        # Send welcome email
         try:
             user_name = f"{db_student.first_name} {db_student.last_name}"
             send_welcome_email(
@@ -545,11 +610,13 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
             )
         except Exception as e:
             logger.error(f"Failed to send welcome email: {str(e)}")
-            # Don't fail verification if welcome email fails
         
         return {
-            "detail": "Email verified successfully! You can now log in to your account.",
-            "verified": True
+            "success": True,
+            "message": f"Welcome, {db_student.first_name}! Your email has been verified successfully.",
+            "code": "VERIFICATION_SUCCESS",
+            "verified": True,
+            "student_name": f"{db_student.first_name} {db_student.last_name}"
         }
         
     except HTTPException:
@@ -558,10 +625,13 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
         logger.error(f"Email verification error: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred during verification. Please try again later."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred during verification. Please try again.",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.post("/resend-verification")
 async def resend_verification_route(
@@ -570,32 +640,49 @@ async def resend_verification_route(
     db: Session = Depends(get_db)
 ):
     """Resend verification email to a student."""
-    
-    # Rate limiting
     client_ip = get_client_ip(request)
     if not rate_limiter.is_allowed(
         f"resend:{client_ip}", 
-        3,  # Max 3 requests
-        300  # Per 5 minutes
+        3,
+        300
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please try again in a few minutes."
+            detail={
+                "success": False,
+                "message": "Too many requests. Please wait a few minutes before trying again.",
+                "code": "RATE_LIMIT_EXCEEDED"
+            }
         )
     
     try:
         email = sanitize_input(email).lower()
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Email address is required",
+                    "code": "MISSING_EMAIL"
+                }
+            )
         
         db_student = db.query(student).filter(student.email == email).first()
         
         if not db_student:
-            # Don't reveal if email exists
-            return {"detail": "If the email exists, a verification link has been sent."}
+            return {
+                "success": True,
+                "message": "If this email is registered, a verification link has been sent.",
+                "code": "EMAIL_SENT"
+            }
         
         if db_student.is_active:
-            return {"detail": "This account is already verified."}
+            return {
+                "success": True,
+                "message": "This account is already verified. You can sign in now.",
+                "code": "ALREADY_VERIFIED"
+            }
         
-        # Generate new token
         verification_token = str(uuid.uuid4())
         token_expiry = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
         
@@ -603,25 +690,37 @@ async def resend_verification_route(
         db_student.verification_token_expiry = token_expiry
         db.commit()
         
-        # Send email
-        user_name = f"{db_student.first_name} {db_student.last_name}"
-        send_verification_email(
-            email=db_student.email,
-            user_name=user_name,
-            token=verification_token
-        )
+        email_sent = False
+        try:
+            user_name = f"{db_student.first_name} {db_student.last_name}"
+            email_sent = send_verification_email(
+                email=db_student.email,
+                user_name=user_name,
+                token=verification_token
+            )
+            logger.info(f"Verification email {'sent' if email_sent else 'failed'} to: {email}")
+        except Exception as e:
+            logger.error(f"Failed to send verification email: {str(e)}")
         
-        logger.info(f"Verification email resent to: {email}")
+        return {
+            "success": True,
+            "message": "Verification email sent! Please check your inbox and spam folder.",
+            "code": "EMAIL_SENT",
+            "email_sent": email_sent
+        }
         
-        return {"detail": "Verification email sent. Please check your inbox."}
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error resending verification: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred. Please try again later."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred. Please try again later.",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.post("/login")
 async def login_student_route(
@@ -630,13 +729,20 @@ async def login_student_route(
     login_data: studentLogin,
     db: Session = Depends(get_db)
 ):
-    """Authenticates a student with rate limiting and account lockout protection."""
-    
-    # Sanitize inputs
+    """Authenticates a student with enhanced error handling and auto-verification flow."""
     login_id = sanitize_input(login_data.login_id)
     client_ip = get_client_ip(request)
     
-    # Rate limiting by IP
+    if not login_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "success": False,
+                "message": "Email or registration number is required",
+                "code": "MISSING_LOGIN_ID"
+            }
+        )
+    
     if not rate_limiter.is_allowed(
         f"login:{client_ip}", 
         RATE_LIMIT_REQUESTS, 
@@ -645,62 +751,108 @@ async def login_student_route(
         logger.warning(f"Rate limit exceeded for login from IP: {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts. Please try again later."
+            detail={
+                "success": False,
+                "message": "Too many login attempts. Please wait a minute and try again.",
+                "code": "RATE_LIMIT_EXCEEDED"
+            }
         )
     
-    # Check if account is locked
     is_locked, locked_until = login_tracker.is_locked(login_id)
     if is_locked:
-        minutes_remaining = int((locked_until - datetime.utcnow()).total_seconds() / 60)
+        minutes_remaining = int((locked_until - datetime.utcnow()).total_seconds() / 60) + 1
         logger.warning(f"Login attempt on locked account: {login_id}")
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
-            detail=f"Account is temporarily locked due to multiple failed login attempts. Please try again in {minutes_remaining} minutes."
+            detail={
+                "success": False,
+                "message": f"Your account has been temporarily locked for security. Please try again in {minutes_remaining} minute{'s' if minutes_remaining != 1 else ''}.",
+                "code": "ACCOUNT_LOCKED",
+                "locked_until": locked_until.isoformat(),
+                "minutes_remaining": minutes_remaining
+            }
         )
     
     try:
-        # Find student
         db_student = db.query(student).filter(
             (student.email == login_id.lower()) | 
             (student.registration_number == login_id.upper())
         ).first()
 
-        # Verify credentials
         if not db_student or not verify_password(login_data.password, db_student.hashed_password):
             login_tracker.record_failed_attempt(login_id)
-            attempts = login_tracker.attempts[login_id]["count"]
-            remaining = MAX_LOGIN_ATTEMPTS - attempts
+            remaining = login_tracker.get_remaining_attempts(login_id)
             
             logger.warning(f"Failed login attempt for: {login_id} from IP: {client_ip}")
             
             if remaining > 0:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"Incorrect credentials. {remaining} attempts remaining before account lockout.",
-                    headers={"WWW-Authenticate": "Bearer"},
+                    detail={
+                        "success": False,
+                        "message": f"Invalid email/registration number or password. {remaining} attempt{'s' if remaining != 1 else ''} remaining.",
+                        "code": "INVALID_CREDENTIALS",
+                        "attempts_remaining": remaining
+                    }
                 )
             else:
                 raise HTTPException(
                     status_code=status.HTTP_423_LOCKED,
-                    detail=f"Account locked due to multiple failed attempts. Please try again in {LOCKOUT_DURATION_MINUTES} minutes.",
+                    detail={
+                        "success": False,
+                        "message": f"Account locked due to multiple failed login attempts. Please try again in {LOCKOUT_DURATION_MINUTES} minutes.",
+                        "code": "ACCOUNT_LOCKED",
+                        "minutes_remaining": LOCKOUT_DURATION_MINUTES
+                    }
                 )
         
-        # Check if account is active
         if not db_student.is_active:
-            logger.warning(f"Login attempt on unverified account: {db_student.email}")
+            logger.info(f"Login attempt on unverified account: {db_student.email}")
+            
+            needs_new_token = (
+                not db_student.verification_token or
+                not db_student.verification_token_expiry or
+                db_student.verification_token_expiry < datetime.utcnow()
+            )
+            
+            if needs_new_token:
+                verification_token = str(uuid.uuid4())
+                token_expiry = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
+                db_student.verification_token = verification_token
+                db_student.verification_token_expiry = token_expiry
+                db.commit()
+            else:
+                verification_token = db_student.verification_token
+            
+            email_sent = False
+            try:
+                user_name = f"{db_student.first_name} {db_student.last_name}"
+                email_sent = send_verification_email(
+                    email=db_student.email,
+                    user_name=user_name,
+                    token=verification_token
+                )
+                logger.info(f"Verification email {'sent' if email_sent else 'failed'} to: {db_student.email}")
+            except Exception as e:
+                logger.error(f"Failed to send verification email: {str(e)}")
+            
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account not verified. Please check your email for the verification link."
+                detail={
+                    "success": False,
+                    "message": "Your email is not verified yet. We've sent a verification link to your email.",
+                    "code": "EMAIL_NOT_VERIFIED",
+                    "email": db_student.email,
+                    "email_sent": email_sent,
+                    "requires_verification": True,
+                    "student_name": f"{db_student.first_name} {db_student.last_name}"
+                }
             )
         
-        # Reset failed login attempts
         login_tracker.reset_attempts(login_id)
-        
-        # Update last login
         db_student.last_login = datetime.utcnow()
         db.commit()
         
-        # Create tokens
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"student_id": db_student.id, "email": db_student.email},
@@ -711,12 +863,11 @@ async def login_student_route(
             data={"student_id": db_student.id, "email": db_student.email}
         )
         
-        # Set secure cookies
         response.set_cookie(
             key=COOKIE_NAME,
             value=access_token,
             httponly=True,
-            secure=IS_PRODUCTION,  # True in production (HTTPS only)
+            secure=IS_PRODUCTION,
             samesite="lax",
             max_age=int(access_token_expires.total_seconds())
         )
@@ -733,9 +884,11 @@ async def login_student_route(
         logger.info(f"Successful login: {db_student.email} from IP: {client_ip}")
         
         return {
-            "detail": "Login successful",
+            "success": True,
+            "message": f"Welcome back, {db_student.first_name}!",
+            "code": "LOGIN_SUCCESS",
             "student": studentResponse.from_orm(db_student),
-            "access_token": access_token,  # Also return in body for mobile apps
+            "access_token": access_token,
             "token_type": "bearer"
         }
         
@@ -744,10 +897,13 @@ async def login_student_route(
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred during login. Please try again later."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An unexpected error occurred during login. Please try again.",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.post("/refresh")
 async def refresh_token_route(
@@ -756,23 +912,29 @@ async def refresh_token_route(
     db: Session = Depends(get_db)
 ):
     """Refresh access token using refresh token."""
-    
     refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
     
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token not found"
+            detail={
+                "success": False,
+                "message": "Session expired. Please sign in again.",
+                "code": "NO_REFRESH_TOKEN"
+            }
         )
     
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         
-        # Verify token type
         if payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type"
+                detail={
+                    "success": False,
+                    "message": "Invalid session. Please sign in again.",
+                    "code": "INVALID_TOKEN_TYPE"
+                }
             )
         
         student_id: int = payload.get("student_id")
@@ -781,10 +943,13 @@ async def refresh_token_route(
         if student_id is None or email is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
+                detail={
+                    "success": False,
+                    "message": "Invalid session. Please sign in again.",
+                    "code": "INVALID_TOKEN"
+                }
             )
         
-        # Verify student exists and is active
         db_student = db.query(student).filter(
             student.id == student_id,
             student.email == email,
@@ -794,17 +959,19 @@ async def refresh_token_route(
         if not db_student:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Student not found or inactive"
+                detail={
+                    "success": False,
+                    "message": "Account not found or inactive. Please sign in again.",
+                    "code": "STUDENT_NOT_FOUND"
+                }
             )
         
-        # Create new access token
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"student_id": db_student.id, "email": db_student.email},
             expires_delta=access_token_expires
         )
         
-        # Set new access token cookie
         response.set_cookie(
             key=COOKIE_NAME,
             value=access_token,
@@ -817,7 +984,9 @@ async def refresh_token_route(
         logger.info(f"Token refreshed for: {db_student.email}")
         
         return {
-            "detail": "Token refreshed successfully",
+            "success": True,
+            "message": "Session refreshed successfully",
+            "code": "TOKEN_REFRESHED",
             "access_token": access_token,
             "token_type": "bearer"
         }
@@ -826,15 +995,24 @@ async def refresh_token_route(
         logger.warning(f"Invalid refresh token: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token"
+            detail={
+                "success": False,
+                "message": "Your session has expired. Please sign in again.",
+                "code": "TOKEN_EXPIRED"
+            }
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Token refresh error: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred while refreshing token"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred while refreshing your session",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.post("/logout")
 async def logout_student_route(
@@ -847,16 +1025,23 @@ async def logout_student_route(
     
     logger.info(f"Student logged out: {current_student.email}")
     
-    return {"detail": "Logout successful"}
-
+    return {
+        "success": True,
+        "message": "You have been logged out successfully",
+        "code": "LOGOUT_SUCCESS"
+    }
 
 @router.get("/me", response_model=studentResponse)
 async def get_current_student_details_route(
     current_student: student = Depends(get_current_student)
 ):
     """Returns the details of the currently authenticated student."""
-    return current_student
-
+    return {
+        "success": True,
+        "message": "User details retrieved successfully",
+        "code": "USER_DETAILS_RETRIEVED",
+        "data": studentResponse.from_orm(current_student)
+    }
 
 @router.post("/password-reset-request")
 async def request_password_reset_route(
@@ -865,32 +1050,43 @@ async def request_password_reset_route(
     db: Session = Depends(get_db)
 ):
     """Request a password reset email."""
-    
-    # Rate limiting
     client_ip = get_client_ip(request)
     if not rate_limiter.is_allowed(
         f"reset:{client_ip}", 
-        3,  # Max 3 requests
-        300  # Per 5 minutes
+        3,
+        300
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many password reset requests. Please try again later."
+            detail={
+                "success": False,
+                "message": "Too many password reset requests. Please wait a few minutes.",
+                "code": "RATE_LIMIT_EXCEEDED"
+            }
         )
     
     try:
         email = sanitize_input(reset_request.email).lower()
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Email address is required",
+                    "code": "MISSING_EMAIL"
+                }
+            )
         
         db_student = db.query(student).filter(student.email == email).first()
         
-        # Don't reveal if email exists (security best practice)
         if not db_student:
             logger.warning(f"Password reset requested for non-existent email: {email}")
             return {
-                "detail": "If the email exists, a password reset link has been sent."
+                "success": True,
+                "message": "If this email is registered, a password reset link has been sent.",
+                "code": "EMAIL_SENT"
             }
         
-        # Generate reset token
         reset_token = str(uuid.uuid4())
         token_expiry = datetime.utcnow() + timedelta(hours=PASSWORD_RESET_TOKEN_EXPIRE_HOURS)
         
@@ -898,35 +1094,37 @@ async def request_password_reset_route(
         db_student.password_reset_token_expiry = token_expiry
         db.commit()
         
-        # Send reset email
+        email_sent = False
         try:
             user_name = f"{db_student.first_name} {db_student.last_name}"
-            success = send_password_reset_email(
+            email_sent = send_password_reset_email(
                 email=db_student.email,
                 user_name=user_name,
                 token=reset_token
             )
-            
-            if success:
-                logger.info(f"Password reset email sent to: {email}")
-            else:
-                logger.error(f"Failed to send password reset email to: {email}")
-                
+            logger.info(f"Password reset email {'sent' if email_sent else 'failed'} to: {email}")
         except Exception as e:
             logger.error(f"Error sending password reset email: {str(e)}")
         
-        # Always return success message (don't reveal email existence)
         return {
-            "detail": "If the email exists, a password reset link has been sent. Please check your inbox."
+            "success": True,
+            "message": "Password reset link sent! Please check your inbox and spam folder.",
+            "code": "EMAIL_SENT",
+            "email_sent": email_sent
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Password reset request error: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred. Please try again later."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred. Please try again later.",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.post("/password-reset-confirm")
 async def confirm_password_reset_route(
@@ -935,8 +1133,6 @@ async def confirm_password_reset_route(
     db: Session = Depends(get_db)
 ):
     """Confirm password reset with token and new password."""
-    
-    # Rate limiting
     client_ip = get_client_ip(request)
     if not rate_limiter.is_allowed(
         f"reset-confirm:{client_ip}", 
@@ -945,13 +1141,25 @@ async def confirm_password_reset_route(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many attempts. Please try again later."
+            detail={
+                "success": False,
+                "message": "Too many attempts. Please try again in a few minutes.",
+                "code": "RATE_LIMIT_EXCEEDED"
+            }
         )
     
     try:
         token = sanitize_input(reset_confirm.token)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Reset token is required",
+                    "code": "MISSING_TOKEN"
+                }
+            )
         
-        # Find student with this reset token
         db_student = db.query(student).filter(
             student.password_reset_token == token
         ).first()
@@ -959,48 +1167,48 @@ async def confirm_password_reset_route(
         if not db_student:
             logger.warning(f"Invalid password reset token attempted: {token[:10]}...")
             raise HTTPException(
-                status_code=400,
-                detail="Invalid or expired reset token"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Invalid or expired reset link. Please request a new password reset.",
+                    "code": "INVALID_TOKEN"
+                }
             )
         
-        # Check if token has expired (handle both timezone-aware and naive datetimes)
         if db_student.password_reset_token_expiry:
-            current_time = datetime.utcnow()
-            token_expiry = db_student.password_reset_token_expiry
-            
-            # Make both timezone-aware for comparison
-            if token_expiry.tzinfo is None:
-                # Token expiry is naive, compare with naive current time
-                if token_expiry < current_time:
-                    logger.warning(f"Expired password reset token for: {db_student.email}")
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Reset token has expired. Please request a new password reset link."
-                    )
-            else:
-                # Token expiry is aware, make current time aware
-                from datetime import timezone
-                current_time_aware = current_time.replace(tzinfo=timezone.utc)
-                if token_expiry < current_time_aware:
-                    logger.warning(f"Expired password reset token for: {db_student.email}")
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Reset token has expired. Please request a new password reset link."
-                    )
+            validate_token_expiry(db_student.password_reset_token_expiry, db_student.email)
         
-        # Validate new password strength
         is_valid, error_msg = validate_password_strength(reset_confirm.new_password)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=error_msg)
-        
-        # Verify password confirmation matches
-        if reset_confirm.new_password != reset_confirm.confirm_password:
             raise HTTPException(
-                status_code=400,
-                detail="Passwords do not match"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": error_msg,
+                    "code": "WEAK_PASSWORD"
+                }
             )
         
-        # Update password
+        if reset_confirm.new_password != reset_confirm.confirm_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Passwords do not match. Please try again.",
+                    "code": "PASSWORD_MISMATCH"
+                }
+            )
+        
+        if verify_password(reset_confirm.new_password, db_student.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "New password must be different from current password",
+                    "code": "SAME_PASSWORD"
+                }
+            )
+        
         db_student.hashed_password = get_password_hash(reset_confirm.new_password)
         db_student.password_reset_token = None
         db_student.password_reset_token_expiry = None
@@ -1010,7 +1218,9 @@ async def confirm_password_reset_route(
         logger.info(f"Password reset successful for: {db_student.email}")
         
         return {
-            "detail": "Password reset successful. You can now log in with your new password."
+            "success": True,
+            "message": "Password reset successful! You can now sign in with your new password.",
+            "code": "PASSWORD_RESET_SUCCESS"
         }
         
     except HTTPException:
@@ -1019,10 +1229,13 @@ async def confirm_password_reset_route(
         logger.error(f"Password reset confirmation error: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred. Please try again later."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred. Please try again later.",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.post("/change-password")
 async def change_password_route(
@@ -1033,35 +1246,62 @@ async def change_password_route(
     db: Session = Depends(get_db)
 ):
     """Change password for authenticated user."""
-    
     try:
-        # Verify old password
+        old_password = sanitize_input(old_password)
+        new_password = sanitize_input(new_password)
+        confirm_password = sanitize_input(confirm_password)
+        
+        if not all([old_password, new_password, confirm_password]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "All password fields are required",
+                    "code": "MISSING_FIELDS"
+                }
+            )
+        
         if not verify_password(old_password, current_student.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Current password is incorrect"
+                detail={
+                    "success": False,
+                    "message": "Current password is incorrect",
+                    "code": "INCORRECT_PASSWORD"
+                }
             )
         
-        # Validate new password
         is_valid, error_msg = validate_password_strength(new_password)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": error_msg,
+                    "code": "WEAK_PASSWORD"
+                }
+            )
         
-        # Verify passwords match
         if new_password != confirm_password:
             raise HTTPException(
-                status_code=400,
-                detail="New passwords do not match"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "New passwords do not match",
+                    "code": "PASSWORD_MISMATCH"
+                }
             )
         
-        # Ensure new password is different from old
         if verify_password(new_password, current_student.hashed_password):
             raise HTTPException(
-                status_code=400,
-                detail="New password must be different from current password"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "New password must be different from current password",
+                    "code": "SAME_PASSWORD"
+                }
             )
         
-        # Update password
         current_student.hashed_password = get_password_hash(new_password)
         current_student.password_changed_at = datetime.utcnow()
         db.commit()
@@ -1069,7 +1309,9 @@ async def change_password_route(
         logger.info(f"Password changed for: {current_student.email}")
         
         return {
-            "detail": "Password changed successfully"
+            "success": True,
+            "message": "Password changed successfully",
+            "code": "PASSWORD_CHANGED"
         }
         
     except HTTPException:
@@ -1078,10 +1320,13 @@ async def change_password_route(
         logger.error(f"Password change error: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred. Please try again later."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred. Please try again later.",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.get("/colleges")
 async def get_colleges_route(db: Session = Depends(get_db)):
@@ -1089,34 +1334,64 @@ async def get_colleges_route(db: Session = Depends(get_db)):
     try:
         populate_colleges_schools(db)
         colleges = db.query(College).all()
-        return [{"id": c.id, "name": c.name} for c in colleges]
+        return {
+            "success": True,
+            "message": "Colleges retrieved successfully",
+            "code": "COLLEGES_RETRIEVED",
+            "data": [{"id": c.id, "name": c.name} for c in colleges]
+        }
     except Exception as e:
         logger.error(f"Error fetching colleges: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred while fetching colleges"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred while fetching colleges",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.get("/colleges/{college_id}/schools")
 async def get_schools_route(college_id: int, db: Session = Depends(get_db)):
     """Get all schools in a specific college."""
     try:
+        college = db.query(College).filter(College.id == college_id).first()
+        if not college:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "success": False,
+                    "message": "College not found",
+                    "code": "COLLEGE_NOT_FOUND"
+                }
+            )
         schools = db.query(School).filter(School.college_id == college_id).all()
-        return [{"id": s.id, "name": s.name, "college_id": s.college_id} for s in schools]
+        return {
+            "success": True,
+            "message": "Schools retrieved successfully",
+            "code": "SCHOOLS_RETRIEVED",
+            "data": [{"id": s.id, "name": s.name, "college_id": s.college_id} for s in schools]
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching schools: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="An error occurred while fetching schools"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred while fetching schools",
+                "code": "SERVER_ERROR"
+            }
         )
-
 
 @router.get("/health")
 async def health_check():
     """Health check endpoint for monitoring."""
     return {
+        "success": True,
         "status": "healthy",
         "service": "authentication",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        "code": "HEALTH_CHECK"
     }
