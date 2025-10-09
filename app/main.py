@@ -53,6 +53,7 @@ origins = [
     "http://localhost:8081",
     "https://dashboard.jkusa.org",
     "https://jkusa.org",
+    "https://auth.jkusa.org",
 ]
 
 app.add_middleware(
