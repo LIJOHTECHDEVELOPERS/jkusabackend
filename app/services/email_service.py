@@ -1,3 +1,8 @@
+"""
+JKUSA Email Service Module
+Professional email templates with brand styling
+File: app/services/email_service.py
+"""
 
 import os
 import smtplib
@@ -11,12 +16,18 @@ logger = logging.getLogger(__name__)
 
 # ==================== EMAIL CONFIGURATION ====================
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.zeptomail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME", "emailapikey")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@jkusa.org")
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "JKUAT Student Association")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://jkusa.org")
+
+# Validate email configuration
+if not SMTP_USERNAME or not SMTP_PASSWORD:
+    logger.warning("SMTP credentials not configured. Email sending will fail.")
+if SMTP_USERNAME == "emailapikey":
+    logger.warning("Using default SMTP_USERNAME. Please update your .env file with actual credentials.")
 
 # Brand Colors (from your CSS theme)
 COLORS = {
