@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   server: {
     port: 3007,
+    allowedHosts: ['auth.jkusa.org'],
     proxy: {
       '/api/auth': {
         target: 'https://auth.jkusa.org',
@@ -19,7 +20,10 @@ export default defineConfig({
   },
   css: {
     postcss: {
-      plugins: [tailwindcss, autoprefixer],
+      plugins: [
+        tailwindcss,
+        autoprefixer,
+      ],
     },
   },
   build: {
