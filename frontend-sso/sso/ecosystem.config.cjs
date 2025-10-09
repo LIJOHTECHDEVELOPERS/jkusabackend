@@ -5,7 +5,7 @@ module.exports = {
       script: './server.js',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
+        PORT: 3007,
       },
       instances: 'max', // Use all available CPU cores
       exec_mode: 'cluster', // Run in cluster mode for better performance
