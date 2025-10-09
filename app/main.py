@@ -53,7 +53,6 @@ origins = [
     "http://localhost:8081",
     "https://dashboard.jkusa.org",
     "https://jkusa.org",
-    "https://portal.jkusa.org",
     "https://auth.jkusa.org",
 ]
 

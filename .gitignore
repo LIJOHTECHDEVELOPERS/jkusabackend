@@ -1,1 +1,4 @@
 .env
+# Python temporary/compiled files
+*.pyc
+__pycache__/
