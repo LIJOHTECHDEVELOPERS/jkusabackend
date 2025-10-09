@@ -3,7 +3,7 @@ Pydantic Schemas for Student Authentication
 File: app/schemas/student.py
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 import re
@@ -22,13 +22,15 @@ class studentCreate(BaseModel):
     year_of_study: int = Field(..., ge=1, le=6)
     password: str = Field(..., min_length=8, max_length=128)
     
-    @validator('first_name', 'last_name')
+    @field_validator('first_name', 'last_name')
+    @classmethod
     def validate_name(cls, v):
         if not re.match(r"^[a-zA-Z\s'-]+$", v):
             raise ValueError('Name must contain only letters, spaces, hyphens, and apostrophes')
         return v.strip()
     
-    @validator('phone_number')
+    @field_validator('phone_number')
+    @classmethod
     def validate_phone(cls, v):
         # Remove spaces and special characters
         phone = re.sub(r'[\s\-\(\)]', '', v)
@@ -36,7 +38,8 @@ class studentCreate(BaseModel):
             raise ValueError('Invalid phone number format')
         return phone
     
-    @validator('registration_number')
+    @field_validator('registration_number')
+    @classmethod
     def validate_reg_number(cls, v):
         # Basic validation - adjust based on your institution's format
         v = v.strip().upper()
@@ -44,8 +47,8 @@ class studentCreate(BaseModel):
             raise ValueError('Registration number contains invalid characters')
         return v
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "first_name": "John",
                 "last_name": "Doe",
@@ -59,6 +62,7 @@ class studentCreate(BaseModel):
                 "password": "SecurePass123!"
             }
         }
+    )
 
 
 class studentLogin(BaseModel):
@@ -66,13 +70,14 @@ class studentLogin(BaseModel):
     login_id: str = Field(..., description="Email or Registration Number")
     password: str = Field(..., min_length=1)
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "login_id": "john.doe@students.jkuat.ac.ke",
                 "password": "SecurePass123!"
             }
         }
+    )
 
 
 class studentResponse(BaseModel):
@@ -92,9 +97,9 @@ class studentResponse(BaseModel):
     last_login: Optional[datetime] = None
     email_verified_at: Optional[datetime] = None
     
-    class Config:
-        orm_mode = True
-        schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "id": 1,
                 "first_name": "John",
@@ -112,6 +117,7 @@ class studentResponse(BaseModel):
                 "email_verified_at": "2024-01-15T11:00:00"
             }
         }
+    )
 
 
 class TokenData(BaseModel):
@@ -124,12 +130,13 @@ class PasswordResetRequest(BaseModel):
     """Schema for password reset request"""
     email: EmailStr
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "john.doe@students.jkuat.ac.ke"
             }
         }
+    )
 
 
 class PasswordResetConfirm(BaseModel):
@@ -138,14 +145,15 @@ class PasswordResetConfirm(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
     confirm_password: str = Field(..., min_length=8, max_length=128)
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "token": "abc123-def456-ghi789",
                 "new_password": "NewSecurePass123!",
                 "confirm_password": "NewSecurePass123!"
             }
         }
+    )
 
 
 class PasswordChange(BaseModel):
@@ -154,14 +162,15 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
     confirm_password: str = Field(..., min_length=8, max_length=128)
     
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "old_password": "OldPassword123!",
                 "new_password": "NewSecurePass123!",
                 "confirm_password": "NewSecurePass123!"
             }
         }
+    )
 
 
 class CollegeResponse(BaseModel):
@@ -169,8 +178,7 @@ class CollegeResponse(BaseModel):
     id: int
     name: str
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SchoolResponse(BaseModel):
@@ -179,5 +187,4 @@ class SchoolResponse(BaseModel):
     name: str
     college_id: int
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
