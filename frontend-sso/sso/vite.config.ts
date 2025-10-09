@@ -8,7 +8,9 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   server: {
     port: 3007,
-    allowedHosts: ['auth.jkusa.org'], // Add this line
+    allowedHosts: ['auth.jkusa.org', '.jkusa.org'], // Allow all jkusa.org subdomains
+    // OR use this to allow all hosts (less secure but useful for development):
+    // allowedHosts: 'all',
     proxy: {
       '/api/auth': {
         target: 'https://auth.jkusa.org',
