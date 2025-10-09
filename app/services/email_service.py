@@ -20,7 +20,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@jkusa.org")
-EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "JKUAT Student Association")
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "JKUSA Accounts")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://jkusa.org")
 
 # Validate email configuration
@@ -61,7 +61,7 @@ class EmailService:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>JKUAT Student Association</title>
+    <title>JKUSA Students Accounts</title>
     <!--[if mso]>
     <style type="text/css">
         body, table, td {{font-family: Arial, Helvetica, sans-serif !important;}}
@@ -255,7 +255,7 @@ class EmailService:
         </p>
         
         <p style="color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-            Thank you for registering with the JKUAT Student Association! We're excited to have you as part of our community.
+            Thank you for registering with the JKUSA! We're excited to have you as part of our community.
         </p>
         
         <p style="color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
@@ -289,7 +289,7 @@ class EmailService:
         )
         
         plain_text = f"""
-Welcome to JKUAT Student Association!
+Welcome to JKUSA STUDENTS COMMUNITY!
 
 Hi {user_name},
 
@@ -501,7 +501,7 @@ def send_verification_email(email: str, user_name: str, token: str) -> bool:
     html, plain = EmailService.get_verification_email(user_name, verification_url)
     return EmailService.send_email(
         to_email=email,
-        subject="Verify Your Email - JKUAT Student Association",
+        subject="Verify Your Email - JKUSA STUDENT ACCOUNT",
         html_content=html,
         plain_text_content=plain
     )
@@ -513,7 +513,7 @@ def send_password_reset_email(email: str, user_name: str, token: str) -> bool:
     html, plain = EmailService.get_password_reset_email(user_name, reset_url)
     return EmailService.send_email(
         to_email=email,
-        subject="Reset Your Password - JKUAT Student Association",
+        subject="Reset Your Password - JKUSA STUDENT ACCOUNT",
         html_content=html,
         plain_text_content=plain
     )
