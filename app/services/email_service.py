@@ -1,14 +1,8 @@
-"""
-JKUSA Email Service Module
-Professional email templates with brand styling
-File: app/services/email_service.py
-"""
-
 import os
 import smtplib
 import ssl
 from email.message import EmailMessage
-from typing import Optional, Dict, Any
+from typing import Optional
 import logging
 from datetime import datetime
 
@@ -21,7 +15,7 @@ SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@jkusa.org")
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "JKUSA Accounts")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://jkusa.org")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://auth.jkusa.org")
 
 # Validate email configuration
 if not SMTP_USERNAME or not SMTP_PASSWORD:
@@ -43,7 +37,6 @@ COLORS = {
     "warning": "#F59E0B",
     "error": "#EF4444",
 }
-
 
 class EmailService:
     """Professional email service with branded templates"""
@@ -507,12 +500,11 @@ The JKUSA Team
             logger.error(f"Failed to send email to {to_email}: {str(e)}")
             return False
 
-
 # ==================== CONVENIENCE FUNCTIONS ====================
 
 def send_verification_email(email: str, user_name: str, token: str) -> bool:
     """Send email verification email"""
-    verification_url = f"{FRONTEND_URL}/auth/verify?token={token}"
+    verification_url = f"{FRONTEND_URL}/verify-email?token={token}"
     html, plain = EmailService.get_verification_email(user_name, verification_url)
     return EmailService.send_email(
         to_email=email,
@@ -521,10 +513,9 @@ def send_verification_email(email: str, user_name: str, token: str) -> bool:
         plain_text_content=plain
     )
 
-
 def send_password_reset_email(email: str, user_name: str, token: str) -> bool:
     """Send password reset email"""
-    reset_url = f"{FRONTEND_URL}/auth/reset-password?token={token}"
+    reset_url = f"{FRONTEND_URL}/reset-password?token={token}"
     html, plain = EmailService.get_password_reset_email(user_name, reset_url)
     return EmailService.send_email(
         to_email=email,
@@ -532,7 +523,6 @@ def send_password_reset_email(email: str, user_name: str, token: str) -> bool:
         html_content=html,
         plain_text_content=plain
     )
-
 
 def send_welcome_email(email: str, user_name: str) -> bool:
     """Send welcome email after verification"""
