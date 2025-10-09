@@ -34,10 +34,12 @@ const OTPInput = ({
   setOtp: (otp: string[]) => void
   error?: string
 }) => {
+  const indices = [0, 1, 2, 3, 4, 5]
+  
   return (
     <div className="space-y-2">
       <div className="flex justify-center space-x-2">
-        {[0, 1, 2, 3, 4, 5].map((index) => (
+        {indices.map((index) => (
           <input
             key={index}
             type="text"
