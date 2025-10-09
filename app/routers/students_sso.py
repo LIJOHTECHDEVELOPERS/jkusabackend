@@ -498,13 +498,30 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
                 detail="Invalid or expired verification token"
             )
         
-        # Check if token has expired
-        if db_student.verification_token_expiry and db_student.verification_token_expiry < datetime.utcnow():
-            logger.warning(f"Expired verification token for: {db_student.email}")
-            raise HTTPException(
-                status_code=400,
-                detail="Verification token has expired. Please request a new verification email."
-            )
+        # Check if token has expired (handle both timezone-aware and naive datetimes)
+        if db_student.verification_token_expiry:
+            current_time = datetime.utcnow()
+            token_expiry = db_student.verification_token_expiry
+            
+            # Make both timezone-aware for comparison
+            if token_expiry.tzinfo is None:
+                # Token expiry is naive, compare with naive current time
+                if token_expiry < current_time:
+                    logger.warning(f"Expired verification token for: {db_student.email}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Verification token has expired. Please request a new verification email."
+                    )
+            else:
+                # Token expiry is aware, make current time aware
+                from datetime import timezone
+                current_time_aware = current_time.replace(tzinfo=timezone.utc)
+                if token_expiry < current_time_aware:
+                    logger.warning(f"Expired verification token for: {db_student.email}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Verification token has expired. Please request a new verification email."
+                    )
         
         # Check if already verified
         if db_student.is_active:
@@ -946,13 +963,30 @@ async def confirm_password_reset_route(
                 detail="Invalid or expired reset token"
             )
         
-        # Check if token has expired
-        if db_student.password_reset_token_expiry < datetime.utcnow():
-            logger.warning(f"Expired password reset token for: {db_student.email}")
-            raise HTTPException(
-                status_code=400,
-                detail="Reset token has expired. Please request a new password reset link."
-            )
+        # Check if token has expired (handle both timezone-aware and naive datetimes)
+        if db_student.password_reset_token_expiry:
+            current_time = datetime.utcnow()
+            token_expiry = db_student.password_reset_token_expiry
+            
+            # Make both timezone-aware for comparison
+            if token_expiry.tzinfo is None:
+                # Token expiry is naive, compare with naive current time
+                if token_expiry < current_time:
+                    logger.warning(f"Expired password reset token for: {db_student.email}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Reset token has expired. Please request a new password reset link."
+                    )
+            else:
+                # Token expiry is aware, make current time aware
+                from datetime import timezone
+                current_time_aware = current_time.replace(tzinfo=timezone.utc)
+                if token_expiry < current_time_aware:
+                    logger.warning(f"Expired password reset token for: {db_student.email}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Reset token has expired. Please request a new password reset link."
+                    )
         
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(reset_confirm.new_password)
