@@ -15,7 +15,7 @@ SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@jkusa.org")
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "JKUSA Accounts")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://auth.jkusa.org")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://portal.jkusa.org")
 
 # Validate email configuration
 if not SMTP_USERNAME or not SMTP_PASSWORD:

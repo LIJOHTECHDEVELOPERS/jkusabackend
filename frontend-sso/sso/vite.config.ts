@@ -13,7 +13,7 @@ export default defineConfig({
     // allowedHosts: 'all',
     proxy: {
       '/api/auth': {
-        target: 'https://auth.jkusa.org',
+        target: 'https://portal.jkusa.org',
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/api\/auth/, ''),
