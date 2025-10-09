@@ -158,33 +158,48 @@ class EmailService:
                         </td>
                     </tr>
                     
-                    <!-- Footer -->
+                    <!-- Footer with blue gradient -->
                     <tr>
-                        <td style="background-color: {COLORS['gray_700']}; padding: 30px 40px; border-radius: 0 0 16px 16px;">
+                        <td style="background: linear-gradient(135deg, {COLORS['primary_deep']} 0%, {COLORS['primary_medium']} 100%); padding: 35px 40px; border-radius: 0 0 16px 16px;">
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                                 <tr>
                                     <td style="text-align: center;">
-                                        <p style="margin: 0 0 12px; color: rgba(255, 255, 255, 0.8); font-size: 14px;">
-                                            &copy; {datetime.now().year} JKUAT Student Association. All rights reserved.
-                                        </p>
-                                        <p style="margin: 0 0 16px; color: rgba(255, 255, 255, 0.6); font-size: 13px;">
-                                            Jomo Kenyatta University of Agriculture and Technology
-                                        </p>
-                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+                                        <!-- University name with icon -->
+                                        <div style="margin-bottom: 20px;">
+                                            <p style="margin: 0; color: {COLORS['white']}; font-size: 16px; font-weight: 600; letter-spacing: 0.3px;">
+                                                🎓 JKUAT Student Association
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Divider line -->
+                                        <div style="height: 1px; background: rgba(255, 255, 255, 0.2); margin: 20px 0;"></div>
+                                        
+                                        <!-- Navigation links -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-bottom: 18px;">
                                             <tr>
-                                                <td style="padding: 0 10px;">
-                                                    <a href="{FRONTEND_URL}" style="color: {COLORS['primary_light']}; text-decoration: none; font-size: 13px;">Website</a>
+                                                <td style="padding: 0 12px;">
+                                                    <a href="{FRONTEND_URL}" style="color: {COLORS['white']}; text-decoration: none; font-size: 14px; font-weight: 500; opacity: 0.95;">🏠 Home</a>
                                                 </td>
-                                                <td style="padding: 0 10px; color: rgba(255, 255, 255, 0.4);">|</td>
-                                                <td style="padding: 0 10px;">
-                                                    <a href="{FRONTEND_URL}/support" style="color: {COLORS['primary_light']}; text-decoration: none; font-size: 13px;">Support</a>
+                                                <td style="padding: 0 8px; color: rgba(255, 255, 255, 0.3);">•</td>
+                                                <td style="padding: 0 12px;">
+                                                    <a href="{FRONTEND_URL}/support" style="color: {COLORS['white']}; text-decoration: none; font-size: 14px; font-weight: 500; opacity: 0.95;">💬 Support</a>
                                                 </td>
-                                                <td style="padding: 0 10px; color: rgba(255, 255, 255, 0.4);">|</td>
-                                                <td style="padding: 0 10px;">
-                                                    <a href="{FRONTEND_URL}/privacy" style="color: {COLORS['primary_light']}; text-decoration: none; font-size: 13px;">Privacy</a>
+                                                <td style="padding: 0 8px; color: rgba(255, 255, 255, 0.3);">•</td>
+                                                <td style="padding: 0 12px;">
+                                                    <a href="{FRONTEND_URL}/privacy" style="color: {COLORS['white']}; text-decoration: none; font-size: 14px; font-weight: 500; opacity: 0.95;">🔒 Privacy</a>
                                                 </td>
                                             </tr>
                                         </table>
+                                        
+                                        <!-- University full name -->
+                                        <p style="margin: 0 0 16px; color: rgba(255, 255, 255, 0.8); font-size: 13px; line-height: 1.6;">
+                                            Jomo Kenyatta University of Agriculture and Technology
+                                        </p>
+                                        
+                                        <!-- Copyright -->
+                                        <p style="margin: 0; color: rgba(255, 255, 255, 0.7); font-size: 12px;">
+                                            &copy; {datetime.now().year} JKUSA. All rights reserved.
+                                        </p>
                                     </td>
                                 </tr>
                             </table>
