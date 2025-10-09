@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   server: {
     port: 3007,
-    allowedHosts: ['auth.jkusa.org'],
+    allowedHosts: ['auth.jkusa.org'], // Add this line
     proxy: {
       '/api/auth': {
         target: 'https://auth.jkusa.org',
@@ -20,16 +20,13 @@ export default defineConfig({
   },
   css: {
     postcss: {
-      plugins: [
-        tailwindcss,
-        autoprefixer,
-      ],
+      plugins: [tailwindcss, autoprefixer],
     },
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: false, // Disable sourcemaps in production for smaller builds
-    minify: 'esbuild', // Use esbuild for faster minification
+    sourcemap: false,
+    minify: 'esbuild',
   },
 })
