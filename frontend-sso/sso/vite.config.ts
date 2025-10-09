@@ -1,0 +1,26 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tsconfigPaths from 'vite-tsconfig-paths'
+import tailwindcss from 'tailwindcss'
+import autoprefixer from 'autoprefixer'
+
+export default defineConfig({
+  plugins: [react(), tsconfigPaths()],
+  server: {
+    port: 3007,
+  },
+  css: {
+    postcss: {
+      plugins: [
+        tailwindcss,
+        autoprefixer,
+      ],
+    },
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false, // Disable sourcemaps in production for smaller builds
+    minify: 'esbuild', // Use esbuild for faster minification
+  },
+})
