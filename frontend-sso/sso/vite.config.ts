@@ -8,13 +8,18 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   server: {
     port: 3007,
+    proxy: {
+      '/api/auth': {
+        target: 'https://auth.jkusa.org',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api\/auth/, ''),
+      },
+    },
   },
   css: {
     postcss: {
-      plugins: [
-        tailwindcss,
-        autoprefixer,
-      ],
+      plugins: [tailwindcss, autoprefixer],
     },
   },
   build: {
