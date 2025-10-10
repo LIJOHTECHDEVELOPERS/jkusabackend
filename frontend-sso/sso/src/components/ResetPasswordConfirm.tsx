@@ -96,5 +96,4 @@ const ResetPasswordConfirm: FC = () => {
     </div>
   )
 }
-
 export default ResetPasswordConfirm
