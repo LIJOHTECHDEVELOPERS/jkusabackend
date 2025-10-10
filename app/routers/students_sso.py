@@ -493,19 +493,30 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
                     "code": "MISSING_TOKEN"
                 }
             )
+
         db_student = db.query(student).filter(
             student.verification_token == token
         ).first()
+
         if not db_student:
-            logger.warning(f"Invalid verification token attempted: {token[:10]}...")
+            logger.info(f"Verification link already used or invalid: {token[:10]}...")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "success": False,
-                    "message": "Invalid verification link. Please request a new verification email.",
+                    "message": "This verification link has already been used or is invalid. If you need a new link, request another verification email.",
                     "code": "INVALID_TOKEN"
                 }
             )
+
+        if db_student.is_active:
+            return {
+                "success": True,
+                "message": "Your email is already verified. You can sign in now.",
+                "code": "ALREADY_VERIFIED",
+                "already_verified": True
+            }
+
         if is_token_expired(db_student.verification_token_expiry):
             logger.warning(f"Expired verification token for: {db_student.email}")
             raise HTTPException(
@@ -516,19 +527,15 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
                     "code": "TOKEN_EXPIRED"
                 }
             )
-        if db_student.is_active:
-            return {
-                "success": True,
-                "message": "Your email is already verified. You can sign in now.",
-                "code": "ALREADY_VERIFIED",
-                "already_verified": True
-            }
+
         db_student.is_active = True
         db_student.verification_token = None
         db_student.verification_token_expiry = None
         db_student.email_verified_at = datetime.utcnow()
         db.commit()
+
         logger.info(f"Email verified successfully: {db_student.email}")
+
         try:
             user_name = f"{db_student.first_name} {db_student.last_name}"
             send_welcome_email(
@@ -537,6 +544,7 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
             )
         except Exception as e:
             logger.error(f"Failed to send welcome email: {str(e)}")
+
         return {
             "success": True,
             "message": f"Welcome, {db_student.first_name}! Your email has been verified successfully.",
