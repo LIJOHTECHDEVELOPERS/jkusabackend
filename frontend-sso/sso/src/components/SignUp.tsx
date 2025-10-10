@@ -65,6 +65,8 @@ const SignUp: FC = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [collegesLoading, setCollegesLoading] = useState(false)
+  const [schoolsLoading, setSchoolsLoading] = useState(false)
 
   useEffect(() => {
     fetchColleges()
@@ -73,24 +75,46 @@ const SignUp: FC = () => {
   useEffect(() => {
     if (formData.college_id) {
       fetchSchools(formData.college_id)
+    } else {
+      setSchools([])
     }
   }, [formData.college_id])
 
   const fetchColleges = async () => {
+    setCollegesLoading(true)
     try {
       const response = await axios.get('https://backend.jkusa.org/students/auth/colleges')
-      setColleges(response.data)
+      // Ensure we always set an array
+      if (Array.isArray(response.data)) {
+        setColleges(response.data)
+      } else {
+        console.error('Invalid colleges data format:', response.data)
+        setColleges([])
+      }
     } catch (err) {
       console.error('Failed to fetch colleges:', err)
+      setColleges([]) // Ensure colleges is always an array
+    } finally {
+      setCollegesLoading(false)
     }
   }
 
   const fetchSchools = async (collegeId: string) => {
+    setSchoolsLoading(true)
     try {
       const response = await axios.get(`https://backend.jkusa.org/students/auth/colleges/${collegeId}/schools`)
-      setSchools(response.data)
+      // Ensure we always set an array
+      if (Array.isArray(response.data)) {
+        setSchools(response.data)
+      } else {
+        console.error('Invalid schools data format:', response.data)
+        setSchools([])
+      }
     } catch (err) {
       console.error('Failed to fetch schools:', err)
+      setSchools([]) // Ensure schools is always an array
+    } finally {
+      setSchoolsLoading(false)
     }
   }
 
@@ -466,19 +490,25 @@ const SignUp: FC = () => {
                     College <span className="text-red-500">*</span>
                   </label>
                   <select
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white text-gray-900 transition-all hover:border-gray-400"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white text-gray-900 transition-all hover:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     value={formData.college_id}
                     onChange={(e) => {
                       setFormData({ ...formData, college_id: e.target.value, school_id: '' })
                       setError('')
                     }}
                     required
+                    disabled={collegesLoading}
                   >
-                    <option value="">Select your college</option>
-                    {colleges.map((c) => (
+                    <option value="">
+                      {collegesLoading ? 'Loading colleges...' : 'Select your college'}
+                    </option>
+                    {Array.isArray(colleges) && colleges.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                  {!collegesLoading && colleges.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">Failed to load colleges. Please refresh the page.</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">
@@ -492,10 +522,12 @@ const SignUp: FC = () => {
                       setError('')
                     }}
                     required
-                    disabled={!formData.college_id}
+                    disabled={!formData.college_id || schoolsLoading}
                   >
-                    <option value="">Select your school</option>
-                    {schools.map((s) => (
+                    <option value="">
+                      {schoolsLoading ? 'Loading schools...' : 'Select your school'}
+                    </option>
+                    {Array.isArray(schools) && schools.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
