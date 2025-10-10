@@ -84,9 +84,12 @@ const SignUp: FC = () => {
     setCollegesLoading(true)
     try {
       const response = await axios.get('https://backend.jkusa.org/students/auth/colleges')
+      // Check if response has data property (API wrapper)
+      const collegesData = response.data?.data || response.data
+      
       // Ensure we always set an array
-      if (Array.isArray(response.data)) {
-        setColleges(response.data)
+      if (Array.isArray(collegesData)) {
+        setColleges(collegesData)
       } else {
         console.error('Invalid colleges data format:', response.data)
         setColleges([])
@@ -103,9 +106,12 @@ const SignUp: FC = () => {
     setSchoolsLoading(true)
     try {
       const response = await axios.get(`https://backend.jkusa.org/students/auth/colleges/${collegeId}/schools`)
+      // Check if response has data property (API wrapper)
+      const schoolsData = response.data?.data || response.data
+      
       // Ensure we always set an array
-      if (Array.isArray(response.data)) {
-        setSchools(response.data)
+      if (Array.isArray(schoolsData)) {
+        setSchools(schoolsData)
       } else {
         console.error('Invalid schools data format:', response.data)
         setSchools([])
