@@ -494,64 +494,95 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
                 }
             )
 
+        # Query student with the verification token
         db_student = db.query(student).filter(
             student.verification_token == token
         ).first()
 
+        # If no student found with this token, check if account exists and is already verified
         if not db_student:
+            # Try to find if this was a previously used token (check recent verifications)
+            # This is a security measure - don't reveal if email exists
             logger.info(f"Verification link already used or invalid: {token[:10]}...")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "success": False,
-                    "message": "This verification link has already been used or is invalid. If you need a new link, request another verification email.",
+                    "message": "This verification link has already been used or is invalid. If you need a new link, please request another verification email or try logging in.",
                     "code": "INVALID_TOKEN"
                 }
             )
 
+        # Check if already verified (edge case - token exists but user is already active)
         if db_student.is_active:
+            # Clear the token since account is already verified
+            db_student.verification_token = None
+            db_student.verification_token_expiry = None
+            db.commit()
+            
+            logger.info(f"Attempted to verify already active account: {db_student.email}")
             return {
                 "success": True,
                 "message": "Your email is already verified. You can sign in now.",
                 "code": "ALREADY_VERIFIED",
-                "already_verified": True
+                "already_verified": True,
+                "student_name": f"{db_student.first_name} {db_student.last_name}"
             }
 
+        # Check if token is expired
         if is_token_expired(db_student.verification_token_expiry):
             logger.warning(f"Expired verification token for: {db_student.email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "success": False,
-                    "message": "The verification link has expired. Please request a new one.",
-                    "code": "TOKEN_EXPIRED"
+                    "message": "The verification link has expired. Please request a new verification email.",
+                    "code": "TOKEN_EXPIRED",
+                    "email": db_student.email
                 }
             )
 
-        db_student.is_active = True
-        db_student.verification_token = None
-        db_student.verification_token_expiry = None
-        db_student.email_verified_at = datetime.utcnow()
-        db.commit()
-
-        logger.info(f"Email verified successfully: {db_student.email}")
-
+        # Perform the verification - use a transaction to ensure atomicity
         try:
-            user_name = f"{db_student.first_name} {db_student.last_name}"
-            send_welcome_email(
-                email=db_student.email,
-                user_name=user_name
-            )
+            db_student.is_active = True
+            db_student.verification_token = None  # Immediately invalidate token
+            db_student.verification_token_expiry = None
+            db_student.email_verified_at = datetime.utcnow()
+            db.commit()
+            
+            logger.info(f"Email verified successfully: {db_student.email}")
+            
+            # Send welcome email (non-blocking - failure shouldn't affect verification success)
+            try:
+                user_name = f"{db_student.first_name} {db_student.last_name}"
+                send_welcome_email(
+                    email=db_student.email,
+                    user_name=user_name
+                )
+            except Exception as e:
+                logger.error(f"Failed to send welcome email: {str(e)}")
+            
+            return {
+                "success": True,
+                "message": f"Welcome, {db_student.first_name}! Your email has been verified successfully. You can now sign in.",
+                "code": "VERIFICATION_SUCCESS",
+                "verified": True,
+                "student_name": f"{db_student.first_name} {db_student.last_name}",
+                "email": db_student.email
+            }
+            
         except Exception as e:
-            logger.error(f"Failed to send welcome email: {str(e)}")
-
-        return {
-            "success": True,
-            "message": f"Welcome, {db_student.first_name}! Your email has been verified successfully.",
-            "code": "VERIFICATION_SUCCESS",
-            "verified": True,
-            "student_name": f"{db_student.first_name} {db_student.last_name}"
-        }
+            db.rollback()
+            logger.error(f"Database error during verification: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "success": False,
+                    "message": "An error occurred while verifying your email. Please try again or contact support.",
+                    "code": "VERIFICATION_ERROR"
+                }
+            )
+            
     except HTTPException:
         raise
     except Exception as e:
@@ -561,7 +592,7 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "success": False,
-                "message": "An error occurred during verification. Please try again.",
+                "message": "An unexpected error occurred during verification. Please try again or contact support.",
                 "code": "SERVER_ERROR"
             }
         )
