@@ -1,4 +1,4 @@
-import { FC, useState, useEffect, useRef } from 'react'
+import { FC, useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Input from './ui/Input'
@@ -12,7 +12,9 @@ import {
   ShieldCheckIcon,
   CheckIcon,
   ArrowLeftIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  PaperAirplaneIcon,
+  InboxIcon
 } from '@heroicons/react/24/outline'
 
 // Logo Component
@@ -24,130 +26,6 @@ const JKUSALogo = ({ className = "w-16 h-16" }: { className?: string }) => (
   />
 )
 
-// OTP Input Component - FIXED
-const OTPInput = ({
-  otp,
-  setOtp,
-  error
-}: {
-  otp: string[]
-  setOtp: (otp: string[]) => void
-  error?: string
-}) => {
-  const inputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null)
-  ]
-
-  const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return
-    
-    const newOtp = [...otp]
-    newOtp[index] = value
-    setOtp(newOtp)
-    
-    if (value && index < 5 && inputRefs[index + 1].current) {
-      inputRefs[index + 1].current?.focus()
-    }
-  }
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs[index - 1].current?.focus()
-    }
-  }
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault()
-    const paste = e.clipboardData.getData('text')
-    if (/^\d{6}$/.test(paste)) {
-      setOtp(paste.split(''))
-    }
-  }
-
-  const inputClass = (hasError: boolean) => 
-    `w-12 h-12 text-center text-lg font-semibold border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-      hasError ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-gray-400'
-    }`
-
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-center space-x-2">
-        <input
-          ref={inputRefs[0]}
-          type="text"
-          maxLength={1}
-          value={otp[0] || ''}
-          onChange={(e) => handleChange(0, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(0, e)}
-          onPaste={handlePaste}
-          className={inputClass(!!error)}
-          autoFocus
-        />
-        <input
-          ref={inputRefs[1]}
-          type="text"
-          maxLength={1}
-          value={otp[1] || ''}
-          onChange={(e) => handleChange(1, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(1, e)}
-          onPaste={handlePaste}
-          className={inputClass(!!error)}
-        />
-        <input
-          ref={inputRefs[2]}
-          type="text"
-          maxLength={1}
-          value={otp[2] || ''}
-          onChange={(e) => handleChange(2, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(2, e)}
-          onPaste={handlePaste}
-          className={inputClass(!!error)}
-        />
-        <input
-          ref={inputRefs[3]}
-          type="text"
-          maxLength={1}
-          value={otp[3] || ''}
-          onChange={(e) => handleChange(3, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(3, e)}
-          onPaste={handlePaste}
-          className={inputClass(!!error)}
-        />
-        <input
-          ref={inputRefs[4]}
-          type="text"
-          maxLength={1}
-          value={otp[4] || ''}
-          onChange={(e) => handleChange(4, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(4, e)}
-          onPaste={handlePaste}
-          className={inputClass(!!error)}
-        />
-        <input
-          ref={inputRefs[5]}
-          type="text"
-          maxLength={1}
-          value={otp[5] || ''}
-          onChange={(e) => handleChange(5, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(5, e)}
-          onPaste={handlePaste}
-          className={inputClass(!!error)}
-        />
-      </div>
-      {error && (
-        <div className="flex items-center justify-center space-x-1 text-red-600 text-sm">
-          <span>{error}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
 const SignIn: FC = () => {
   const { login } = useAuth()
   const navigate = useNavigate()
@@ -156,15 +34,14 @@ const SignIn: FC = () => {
   // Form state
   const [currentStep, setCurrentStep] = useState<'signin' | 'verify'>('signin')
   const [formData, setFormData] = useState({ login_id: '', password: '' })
-  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', ''])
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
-  const [verificationAttempts, setVerificationAttempts] = useState(0)
   const [studentInfo, setStudentInfo] = useState<{ email: string; name: string } | null>(null)
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null)
+  const [checkingEmail, setCheckingEmail] = useState(false)
 
   // Extract URL parameters
   const returnType = searchParams.get('return')
@@ -177,6 +54,33 @@ const SignIn: FC = () => {
       return () => clearTimeout(timer)
     }
   }, [resendCooldown])
+
+  // Auto-check for email verification status every 5 seconds
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    
+    if (currentStep === 'verify' && checkingEmail) {
+      interval = setInterval(async () => {
+        try {
+          // Call your check verification status endpoint here
+          // const response = await checkVerificationStatus(studentInfo?.email || formData.login_id)
+          // if (response.verified) {
+          //   setSuccessMessage('Email verified! Redirecting to dashboard...')
+          //   setCheckingEmail(false)
+          //   setTimeout(() => {
+          //     navigate('/dashboard')
+          //   }, 2000)
+          // }
+        } catch (err) {
+          // Silent fail - just continue checking
+        }
+      }, 5000)
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [currentStep, checkingEmail, studentInfo, formData.login_id, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -205,8 +109,9 @@ const SignIn: FC = () => {
             })
             setCurrentStep('verify')
             setResendCooldown(60)
+            setCheckingEmail(true)
             if (email_sent) {
-              setSuccessMessage('A verification code has been sent to your email. Please check your inbox.')
+              setSuccessMessage('A verification link has been sent to your email. Please check your inbox and click the link to verify your account.')
             } else {
               setError('Could not send verification email. Please try again or contact support.')
             }
@@ -244,59 +149,7 @@ const SignIn: FC = () => {
     }
   }
 
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const otpString = otp.join('')
-    
-    if (otpString.length !== 6) {
-      setError('Please enter the complete 6-digit verification code')
-      return
-    }
-    
-    if (!/^\d{6}$/.test(otpString)) {
-      setError('Verification code must contain only numbers')
-      return
-    }
-    
-    setLoading(true)
-    setError('')
-    
-    try {
-      // Call your verification endpoint here
-      // const response = await verifyEmail(otpString)
-      
-      setSuccessMessage('Email verified successfully! Redirecting...')
-      setTimeout(() => {
-        handleSubmit(e)
-      }, 2000)
-    } catch (err: any) {
-      const errorData = err.response?.data?.detail || err.response?.data || {}
-      
-      if (typeof errorData === 'object') {
-        const { code, message } = errorData
-        
-        switch (code) {
-          case 'INVALID_OTP':
-            setVerificationAttempts(prev => prev + 1)
-            setError(message || 'Invalid verification code. Please try again.')
-            break
-            
-          case 'TOKEN_EXPIRED':
-            setError(message || 'Verification code has expired. Please request a new one.')
-            break
-            
-          default:
-            setError(message || 'Verification failed. Please try again.')
-        }
-      } else {
-        setError('Verification failed. Please try again.')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleResendOTP = async () => {
+  const handleResendLink = async () => {
     if (resendCooldown > 0) return
     
     setLoading(true)
@@ -308,18 +161,17 @@ const SignIn: FC = () => {
       // const response = await resendVerification(studentInfo?.email || formData.login_id)
       
       setResendCooldown(60)
-      setOtp(['', '', '', '', '', ''])
-      setVerificationAttempts(0)
-      setSuccessMessage('New verification code sent to your email!')
+      setCheckingEmail(true)
+      setSuccessMessage('New verification link sent to your email!')
       
-      setTimeout(() => setSuccessMessage(''), 3000)
+      setTimeout(() => setSuccessMessage(''), 5000)
     } catch (err: any) {
       const errorData = err.response?.data?.detail || err.response?.data || {}
       
       if (typeof errorData === 'object') {
-        setError(errorData.message || 'Failed to resend verification code. Please try again.')
+        setError(errorData.message || 'Failed to resend verification link. Please try again.')
       } else {
-        setError('Failed to resend verification code. Please try again.')
+        setError('Failed to resend verification link. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -330,11 +182,10 @@ const SignIn: FC = () => {
     setCurrentStep('signin')
     setError('')
     setSuccessMessage('')
-    setOtp(['', '', '', '', '', ''])
-    setVerificationAttempts(0)
     setResendCooldown(0)
     setStudentInfo(null)
     setAttemptsRemaining(null)
+    setCheckingEmail(false)
   }
 
   // Sign-In Step
@@ -517,7 +368,7 @@ const SignIn: FC = () => {
     )
   }
 
-  // OTP Verification Step
+  // Email Verification Step
   return (
     <div className="font-sans min-h-screen flex flex-col lg:flex-row">
       <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-gray-50 to-white">
@@ -539,9 +390,12 @@ const SignIn: FC = () => {
                 <p className="text-xs text-gray-600">The Jkuat Student's Community</p>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Verify your email</h2>
+            <div className="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4">
+              <InboxIcon className="h-10 w-10 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Check your email</h2>
             <p className="text-gray-600 text-sm">
-              We've sent a verification code to{' '}
+              We've sent a verification link to{' '}
               <span className="font-medium text-gray-900">
                 {studentInfo?.email || formData.login_id}
               </span>
@@ -555,11 +409,11 @@ const SignIn: FC = () => {
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start space-x-3">
-              <EnvelopeIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <PaperAirplaneIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1 text-sm text-blue-800">
                 <p className="font-medium">Email verification required</p>
                 <p className="mt-1 text-blue-700">
-                  Your account needs to be verified before you can sign in. Check your inbox for the verification code.
+                  Click the verification link in your email to activate your account and complete the sign-in process.
                 </p>
               </div>
             </div>
@@ -567,7 +421,10 @@ const SignIn: FC = () => {
 
           {successMessage && (
             <Alert type="success" onClose={() => setSuccessMessage('')}>
-              {successMessage}
+              <div className="flex items-center space-x-2">
+                <CheckIcon className="h-5 w-5" />
+                <span>{successMessage}</span>
+              </div>
             </Alert>
           )}
 
@@ -577,26 +434,23 @@ const SignIn: FC = () => {
             </Alert>
           )}
 
-          <form onSubmit={handleVerifyOTP} className="space-y-6">
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-700 text-center">
-                Verification Code
-              </label>
-              <OTPInput otp={otp} setOtp={setOtp} error={error} />
+          {checkingEmail && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div className="flex-1 text-sm text-green-800">
+                  <p className="font-medium">Waiting for verification...</p>
+                  <p className="text-green-700 text-xs mt-1">
+                    You'll be automatically redirected once you click the link in your email
+                  </p>
+                </div>
+              </div>
             </div>
+          )}
 
-            <Button
-              loading={loading}
-              disabled={otp.join('').length !== 6 || loading}
-              className="w-full"
-            >
-              {loading ? 'Verifying...' : 'Verify & Sign In'}
-            </Button>
-          </form>
-
-          <div className="text-center space-y-4">
-            <div className="text-sm text-gray-600">
-              Didn't receive the code?{' '}
+          <div className="space-y-4">
+            <div className="text-center text-sm text-gray-600">
+              Didn't receive the email?{' '}
               {resendCooldown > 0 ? (
                 <span className="text-gray-400">
                   Resend in {resendCooldown}s
@@ -604,42 +458,49 @@ const SignIn: FC = () => {
               ) : (
                 <button
                   type="button"
-                  onClick={handleResendOTP}
+                  onClick={handleResendLink}
                   disabled={loading}
                   className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center space-x-1 transition-colors disabled:opacity-50"
                 >
-                  <span>Resend Code</span>
+                  <span>Resend Link</span>
+                  <PaperAirplaneIcon className="h-4 w-4" />
                 </button>
               )}
             </div>
 
-            {verificationAttempts > 0 && verificationAttempts < 5 && (
-              <div className="text-xs text-orange-600 bg-orange-50 p-3 rounded-lg border border-orange-200">
-                <div className="flex items-center justify-center space-x-2">
-                  <ExclamationTriangleIcon className="h-4 w-4" />
-                  <span>{5 - verificationAttempts} attempts remaining</span>
-                </div>
-              </div>
-            )}
-
-            {verificationAttempts >= 5 && (
-              <div className="text-xs text-red-600 bg-red-50 p-3 rounded-lg border border-red-200">
-                <div className="flex items-center justify-center space-x-2">
-                  <ExclamationTriangleIcon className="h-4 w-4" />
-                  <span>Too many failed attempts. Please try signing in again.</span>
-                </div>
-              </div>
-            )}
+            <Button
+              onClick={() => {
+                setCheckingEmail(false)
+                navigate('/dashboard')
+              }}
+              className="w-full"
+              variant="primary"
+            >
+              I've verified my email
+            </Button>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
             <p className="font-medium text-gray-900 mb-2">Need help?</p>
             <ul className="space-y-1 text-xs">
               <li>• Check your spam or junk folder</li>
-              <li>• Make sure you're checking the correct email</li>
-              <li>• Wait a minute and try resending the code</li>
+              <li>• Make sure you're checking the correct email address</li>
+              <li>• The link expires in 24 hours</li>
+              <li>• Wait a minute before requesting a new link</li>
               <li>• Contact support if the issue persists</li>
             </ul>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
+            <div className="flex items-start space-x-2">
+              <ExclamationTriangleIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Security Note</p>
+                <p className="mt-1">
+                  Don't share your verification link with anyone. It's unique to your account.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -651,29 +512,29 @@ const SignIn: FC = () => {
             <div className="w-16 h-16 mx-auto bg-white/20 rounded-full flex items-center justify-center">
               <EnvelopeIcon className="h-8 w-8" />
             </div>
-            <h3 className="text-2xl font-bold">Almost There!</h3>
+            <h3 className="text-2xl font-bold">One Click Away!</h3>
             <p className="text-blue-100 text-base leading-relaxed">
-              Please verify your email address to complete the sign-in process and access your account.
+              Simply click the verification link in your email to complete the sign-in process and access your account.
             </p>
             <div className="bg-white/10 rounded-lg p-4">
               <div className="text-sm space-y-3">
                 <div className="flex items-center space-x-3">
                   <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
-                  <span>Check your inbox</span>
+                  <span>Check your email inbox</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
-                  <span>Enter the 6-digit code</span>
+                  <span>Click the verification link</span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full flex-shrink-0"></div>
-                  <span>Access your dashboard</span>
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${checkingEmail ? 'bg-yellow-400 animate-pulse' : 'bg-gray-400'}`}></div>
+                  <span>Automatic redirect to dashboard</span>
                 </div>
               </div>
             </div>
             <div className="text-sm text-blue-100 opacity-90 bg-white/5 rounded-lg p-3">
               <p className="font-medium mb-1">Pro Tip:</p>
-              <p>Add no-reply@jkusa.ac.ke to your contacts to ensure you receive future notifications.</p>
+              <p>Add no-reply@jkusa.ac.ke to your contacts to ensure you receive future notifications and updates.</p>
             </div>
           </div>
         </div>
