@@ -211,8 +211,8 @@ async def chat_with_ai(
         # Build system prompt with context
         system_prompt = build_system_prompt(context_data)
         
-        # Initialize Gemini model
-        model = genai.GenerativeModel('gemini-pro')
+        # Initialize Gemini model (using latest model name)
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Build conversation history
         conversation_parts = []
