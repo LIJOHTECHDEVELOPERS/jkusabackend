@@ -211,8 +211,8 @@ async def chat_with_ai(
         # Build system prompt with context
         system_prompt = build_system_prompt(context_data)
         
-        # Initialize Gemini model (using latest model name)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Initialize Gemini model (using latest stable model)
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Build conversation history
         conversation_parts = []
@@ -266,6 +266,7 @@ async def ai_health_check():
     """
     return {
         "status": "healthy" if GOOGLE_AI_API_KEY else "not_configured",
-        "service": "Google AI (Gemini)",
+        "service": "Google AI (Gemini 2.5 Flash)",
+        "model": "gemini-2.5-flash",
         "message": "AI Assistant is ready" if GOOGLE_AI_API_KEY else "Please configure GOOGLE_AI_API_KEY"
     }
