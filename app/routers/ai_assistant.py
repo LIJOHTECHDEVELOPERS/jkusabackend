@@ -1,5 +1,3 @@
-## Fixed AI Script - Corrected Error Handling
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -17,8 +15,6 @@ from app.models.leadership import Leadership
 from app.models.gallery import Gallery
 from app.models.resource import Resource
 from app.models.announcement import Announcement
-# Comment out News import for now to avoid import errors - add back when model exists
-# from app.models.news import News
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -60,7 +56,7 @@ def gather_context_data(db: Session, user_query: str) -> dict:
     try:
         # Gather Events
         if any(keyword in query_lower for keyword in ["event", "events", "happening", "program", "schedule", "when", "upcoming", "date", "meeting"]):
-            events = db.query(Event).filter(Event.is_published == True).limit(10).all()  # Reduced limit for stability
+            events = db.query(Event).filter(Event.is_published == True).limit(10).all()
             context["events"] = [
                 {
                     "title": getattr(e, 'title', 'N/A'),
@@ -164,20 +160,6 @@ def gather_context_data(db: Session, user_query: str) -> dict:
     except Exception as e:
         logger.warning(f"Error fetching announcements: {str(e)}")
     
-    # Skip News for now to avoid import errors - uncomment when News model is available
-    # try:
-    #     if any(keyword in query_lower for keyword in ["news", "article", "story", "report", "blog", "press"]):
-    #         news_items = db.query(News).limit(10).all()
-    #         context["news"] = [
-    #             {
-    #                 "title": getattr(n, 'title', 'N/A'),
-    #                 "content": getattr(n, 'content', ''),
-    #                 "date": str(getattr(n, 'published_at', ''))
-    #             } for n in news_items
-    #         ]
-    # except Exception as e:
-    #     logger.warning(f"Error fetching news: {str(e)}")
-    
     return context
 
 def build_system_prompt(context_data: dict) -> str:
@@ -213,7 +195,7 @@ ABOUT JKUSA:
     
     if context_data.get("events") and len(context_data["events"]) > 0:
         prompt += "\n\n🗓️ UPCOMING EVENTS:\n"
-        for event in context_data["events"][:3]:  # Limit to 3 to prevent token overflow
+        for event in context_data["events"][:3]:
             prompt += f"- {event['title']}: {event['description']} ({event['date']}, {event['location']})\n"
         sections_added.append("Events")
     
@@ -256,7 +238,7 @@ ABOUT JKUSA:
 
 def get_sources_from_context(context_data: dict) -> List[str]:
     """Extract source references from context data."""
-    sources = set()  # Use set to avoid duplicates
+    sources = set()
     
     if context_data.get("events"):
         sources.add("JKUSA Events Database")
@@ -295,42 +277,69 @@ async def chat_with_ai(
         # Build system prompt
         system_prompt = build_system_prompt(context_data)
         
-        # Initialize model with safety settings
+        # Initialize model with safety settings - FIXED VERSION
         try:
-            model = genai.GenerativeModel(
-                'gemini-2.5-flash',
-                generation_config=genai.types.generation_config.GenerationConfig(
-                    max_output_tokens=1000,
-                    temperature=0.7
-                ),
-                safety_settings={
-                    "HARM_CATEGORY_HARASSMENT": genai.types.safety_setting.SafetySetting.BLOCK_MEDIUM_AND_ABOVE,
-                    "HARM_CATEGORY_HATE_SPEECH": genai.types.safety_setting.SafetySetting.BLOCK_MEDIUM_AND_ABOVE,
-                    "HARM_CATEGORY_SEXUALLY_EXPLICIT": genai.types.safety_setting.SafetySetting.BLOCK_MEDIUM_AND_ABOVE,
-                    "HARM_CATEGORY_DANGEROUS_CONTENT": genai.types.safety_setting.SafetySetting.BLOCK_MEDIUM_AND_ABOVE,
-                }
+            # Correct way to create GenerationConfig
+            generation_config = genai.GenerationConfig(
+                max_output_tokens=1000,
+                temperature=0.7
             )
+            
+            # Correct way to set safety settings
+            safety_settings = [
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH",
+                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                },
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+                }
+            ]
+            
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash-exp',
+                generation_config=generation_config,
+                safety_settings=safety_settings
+            )
+            logger.info("Model initialized successfully with generation config and safety settings")
         except Exception as model_err:
-            logger.error(f"Failed to initialize model: {str(model_err)}")
+            logger.warning(f"Failed to initialize model with config: {str(model_err)}, using basic model")
             # Fallback to basic model initialization
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
         
-        # Prepare the prompt (simplified approach to avoid complex history issues)
+        # Prepare the prompt
         full_prompt = f"{system_prompt}\n\nUSER QUESTION: {chat_message.message}\n\nPlease provide a helpful response based on the JKUSA context above."
         
         # Generate response with comprehensive error handling
         try:
             response = model.generate_content(full_prompt)
             ai_response = response.text
-        except genai.types.BlockedPromptException:
-            logger.warning("AI response blocked due to safety filters")
-            ai_response = "I'm sorry, I can't respond to that query due to content guidelines. How else can I help with JKUSA information?"
-        except genai.types.StopCandidateException:
-            logger.warning("AI generation stopped unexpectedly")
-            ai_response = "I apologize, but I encountered an issue generating a response. Please try rephrasing your question!"
+            logger.info("AI response generated successfully")
         except Exception as ai_err:
-            logger.error(f"AI generation failed: {str(ai_err)}")
-            ai_response = "I'm experiencing technical difficulties right now. Please try again later or contact JKUSA support for assistance."
+            error_msg = str(ai_err).lower()
+            
+            # Handle specific error types
+            if "block" in error_msg or "safety" in error_msg:
+                logger.warning("AI response blocked due to safety filters")
+                ai_response = "I'm sorry, I can't respond to that query due to content guidelines. How else can I help with JKUSA information?"
+            elif "quota" in error_msg or "rate" in error_msg:
+                logger.error("API quota exceeded")
+                ai_response = "I'm currently experiencing high demand. Please try again in a moment."
+            elif "invalid" in error_msg and "api" in error_msg:
+                logger.error("Invalid API key")
+                ai_response = "There's a configuration issue. Please contact JKUSA support."
+            else:
+                logger.error(f"AI generation failed: {str(ai_err)}")
+                ai_response = "I'm experiencing technical difficulties right now. Please try again later or contact JKUSA support for assistance."
         
         # Get sources
         sources = get_sources_from_context(context_data)
@@ -356,17 +365,23 @@ async def chat_with_ai(
 async def ai_health_check():
     """Health check endpoint."""
     model_available = False
+    error_details = None
+    
     try:
         # Test model availability
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Try a simple generation to verify it works
+        test_response = model.generate_content("Hello")
         model_available = True
     except Exception as e:
-        logger.warning(f"Model test failed: {str(e)}")
+        error_details = str(e)
+        logger.warning(f"Model test failed: {error_details}")
     
     return {
         "status": "healthy" if GOOGLE_AI_API_KEY and model_available else "degraded",
-        "service": "Google AI (Gemini 2.5 Flash)",
+        "service": "Google AI (Gemini 2.0 Flash)",
         "model_available": model_available,
         "api_key_configured": bool(GOOGLE_AI_API_KEY),
+        "error": error_details if not model_available else None,
         "message": "AI Assistant ready" if GOOGLE_AI_API_KEY and model_available else "Configuration issues detected"
     }
