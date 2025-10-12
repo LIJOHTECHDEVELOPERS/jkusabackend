@@ -298,7 +298,7 @@ async def chat_with_ai(
         # Initialize model with safety settings
         try:
             model = genai.GenerativeModel(
-                'gemini-1.5-flash',
+                'gemini-2.5-flash',
                 generation_config=genai.types.generation_config.GenerationConfig(
                     max_output_tokens=1000,
                     temperature=0.7
@@ -313,7 +313,7 @@ async def chat_with_ai(
         except Exception as model_err:
             logger.error(f"Failed to initialize model: {str(model_err)}")
             # Fallback to basic model initialization
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Prepare the prompt (simplified approach to avoid complex history issues)
         full_prompt = f"{system_prompt}\n\nUSER QUESTION: {chat_message.message}\n\nPlease provide a helpful response based on the JKUSA context above."
@@ -358,14 +358,14 @@ async def ai_health_check():
     model_available = False
     try:
         # Test model availability
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         model_available = True
     except Exception as e:
         logger.warning(f"Model test failed: {str(e)}")
     
     return {
         "status": "healthy" if GOOGLE_AI_API_KEY and model_available else "degraded",
-        "service": "Google AI (Gemini 1.5 Flash)",
+        "service": "Google AI (Gemini 2.5 Flash)",
         "model_available": model_available,
         "api_key_configured": bool(GOOGLE_AI_API_KEY),
         "message": "AI Assistant ready" if GOOGLE_AI_API_KEY and model_available else "Configuration issues detected"
