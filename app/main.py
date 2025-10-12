@@ -25,7 +25,8 @@ from app.routers import (
     admin_resource,
     admin_activity,
     admin_club,
-    students_sso
+    students_sso,
+    ai_assistant  # NEW: AI Assistant router
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
@@ -43,7 +44,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="CMSystem we are building")
+app = FastAPI(title="JKUSA CMS Backend with AI Assistant")
 
 # Enable CORS
 origins = [
@@ -116,8 +117,17 @@ app.include_router(public_activity_router)
 app.include_router(admin_club.router)
 app.include_router(public_club_router)
 app.include_router(students_sso.router)
+app.include_router(ai_assistant.router)  # NEW: Include AI Assistant router
 
 @app.get("/")
 def read_root():
     logger.debug("Root endpoint accessed")
-    return {"message": "JKUSA CMS Backend is running."}
+    return {
+        "message": "JKUSA CMS Backend with AI Assistant is running.",
+        "features": [
+            "Content Management System",
+            "Event Management",
+            "Club Management",
+            "AI-Powered Assistant for JKUAT/JKUSA Information"
+        ]
+    }
