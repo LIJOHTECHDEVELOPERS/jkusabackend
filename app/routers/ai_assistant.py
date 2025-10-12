@@ -10,6 +10,7 @@ from typing import List, Optional
 import google.generativeai as genai
 import os
 from datetime import datetime
+import logging
 
 from app.database import get_db
 from app.models.event import Event
@@ -18,6 +19,9 @@ from app.models.club import Club
 from app.models.leadership import Leadership
 from app.models.gallery import Gallery
 from app.models.resource import Resource
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["AI Assistant"])
 
