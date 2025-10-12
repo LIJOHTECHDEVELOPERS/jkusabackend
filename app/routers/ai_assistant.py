@@ -16,6 +16,14 @@ from app.models.gallery import Gallery
 from app.models.resource import Resource
 from app.models.announcement import Announcement
 
+# Try to import News model - handle gracefully if not available
+try:
+    from app.models.news import News
+    NEWS_MODEL_AVAILABLE = True
+except ImportError:
+    NEWS_MODEL_AVAILABLE = False
+    logger.warning("News model not available - news features will be limited")
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -54,9 +62,9 @@ def gather_context_data(db: Session, user_query: str) -> dict:
     query_lower = user_query.lower()
     
     try:
-        # Gather Events
-        if any(keyword in query_lower for keyword in ["event", "events", "happening", "program", "schedule", "when", "upcoming", "date", "meeting"]):
-            events = db.query(Event).filter(Event.is_published == True).limit(10).all()
+        # Gather Events - Always fetch for better context
+        events = db.query(Event).filter(Event.is_published == True).order_by(Event.event_date.desc()).limit(5).all()
+        if events:
             context["events"] = [
                 {
                     "title": getattr(e, 'title', 'N/A'),
@@ -66,13 +74,14 @@ def gather_context_data(db: Session, user_query: str) -> dict:
                     "category": getattr(e, 'category', '')
                 } for e in events
             ]
+            logger.info(f"Fetched {len(events)} events for context")
     except Exception as e:
         logger.warning(f"Error fetching events: {str(e)}")
     
     try:
-        # Gather Activities
-        if any(keyword in query_lower for keyword in ["activity", "activities", "do", "participate", "join", "sport", "club activity"]):
-            activities = db.query(Activity).filter(getattr(Activity, 'is_published', True) == True).limit(10).all()
+        # Gather Activities - Always fetch for better context
+        activities = db.query(Activity).filter(getattr(Activity, 'is_published', True) == True).order_by(Activity.start_datetime.desc()).limit(5).all()
+        if activities:
             context["activities"] = [
                 {
                     "title": getattr(a, 'title', 'N/A'),
@@ -82,13 +91,14 @@ def gather_context_data(db: Session, user_query: str) -> dict:
                     "location": getattr(a, 'location', '')
                 } for a in activities
             ]
+            logger.info(f"Fetched {len(activities)} activities for context")
     except Exception as e:
         logger.warning(f"Error fetching activities: {str(e)}")
     
     try:
-        # Gather Clubs
-        if any(keyword in query_lower for keyword in ["club", "clubs", "organization", "society", "join", "group", "association"]):
-            clubs = db.query(Club).filter(getattr(Club, 'is_active', True) == True).limit(10).all()
+        # Gather Clubs - Always fetch for better context
+        clubs = db.query(Club).filter(getattr(Club, 'is_active', True) == True).limit(8).all()
+        if clubs:
             context["clubs"] = [
                 {
                     "name": getattr(c, 'name', 'N/A'),
@@ -97,6 +107,7 @@ def gather_context_data(db: Session, user_query: str) -> dict:
                     "contact": getattr(c, 'contact_email', '')
                 } for c in clubs
             ]
+            logger.info(f"Fetched {len(clubs)} clubs for context")
     except Exception as e:
         logger.warning(f"Error fetching clubs: {str(e)}")
     
@@ -147,9 +158,9 @@ def gather_context_data(db: Session, user_query: str) -> dict:
         logger.warning(f"Error fetching gallery: {str(e)}")
     
     try:
-        # Gather Announcements
-        if any(keyword in query_lower for keyword in ["announcement", "announce", "notice", "update", "bulletin"]):
-            announcements = db.query(Announcement).limit(10).all()
+        # Gather Announcements - Always fetch for better context
+        announcements = db.query(Announcement).order_by(Announcement.announced_at.desc()).limit(3).all()
+        if announcements:
             context["announcements"] = [
                 {
                     "title": getattr(a, 'title', 'N/A'),
@@ -157,8 +168,26 @@ def gather_context_data(db: Session, user_query: str) -> dict:
                     "date": str(getattr(a, 'announced_at', ''))
                 } for a in announcements
             ]
+            logger.info(f"Fetched {len(announcements)} announcements for context")
     except Exception as e:
         logger.warning(f"Error fetching announcements: {str(e)}")
+    
+    # Fetch News if model is available
+    if NEWS_MODEL_AVAILABLE:
+        try:
+            news_items = db.query(News).filter(getattr(News, 'is_published', True) == True).order_by(News.published_at.desc()).limit(5).all()
+            if news_items:
+                context["news"] = [
+                    {
+                        "title": getattr(n, 'title', 'N/A'),
+                        "content": getattr(n, 'content', ''),
+                        "summary": getattr(n, 'summary', ''),
+                        "date": str(getattr(n, 'published_at', ''))
+                    } for n in news_items
+                ]
+                logger.info(f"Fetched {len(news_items)} news items for context")
+        except Exception as e:
+            logger.warning(f"Error fetching news: {str(e)}")
     
     return context
 
@@ -171,22 +200,55 @@ STRICT GUIDELINES:
 1. You ONLY provide information about JKUAT and JKUSA
 2. You MUST NOT answer questions about other universities or student organizations
 3. If asked about non-JKUAT/JKUSA topics, politely redirect: "I can only help with JKUAT and JKUSA information. How can I assist you with our university?"
-4. Base your answers ONLY on the provided context data
-5. If information is not in the context, say: "I don't have that specific information right now, but I can help with other JKUSA details!"
-6. Be helpful, friendly, and professional
-7. Keep responses concise but informative
-8. Mention sources when providing specific information
+4. PRIORITIZE the provided context data for current/specific information (events, news, announcements, etc.)
+5. If information is NOT in the context BUT is general knowledge about JKUAT/JKUSA, you MAY provide it using your knowledge
+6. You can provide information about:
+   - JKUAT history, founding, campuses, faculties, programs
+   - JKUSA structure, roles, responsibilities, student services
+   - General admission processes, academic calendars, campus facilities
+   - Student life, accommodation, transportation, campus culture
+   - Any other JKUAT/JKUSA related general information
+7. If you use your general knowledge (not from context), mention: "Based on general JKUAT information..."
+8. Only say "I don't have that information" if it's something very specific that would require real-time data
+9. Be helpful, friendly, and professional
+10. Keep responses concise but informative
 
 ABOUT JKUAT:
-- Jomo Kenyatta University of Agriculture and Technology
-- Located in Juja, Kiambu County, Kenya
+- Jomo Kenyatta University of Agriculture and Technology (JKUAT)
+- Founded in 1981 as a Middle Level College by the Government of Kenya
+- Elevated to a full university in 1994 through an Act of Parliament
+- Named after Kenya's first President, Jomo Kenyatta
+- Located in Juja, Kiambu County, Kenya (about 36 km from Nairobi)
 - Leading public university focused on agriculture, engineering, technology, and sciences
-- Multiple campuses including Main Campus (Juja), Karen Campus, and others
+- Multiple campuses including Main Campus (Juja), Karen Campus, Mombasa Campus, and others
+- Motto: "Sustainable Livelihoods through Innovation"
+- Known for excellence in research, innovation, and entrepreneurship
+- Offers undergraduate, postgraduate, and PhD programs
+- Schools/Faculties include: Engineering, Agriculture, Health Sciences, Business, Pure & Applied Sciences, Architecture & Building Sciences, etc.
 
 ABOUT JKUSA:
-- JKUAT Students' Association - official student government
-- Represents all JKUAT students across campuses
-- Organizes events, activities, leadership, and student services
+- JKUAT Students' Association - official student government at JKUAT
+- Represents all JKUAT students across all campuses
+- Organizes events, activities, leadership programs, and student services
+- Advocates for student welfare and rights
+- Facilitates student clubs and organizations
+- Provides resources and support for student development
+- Elected student leadership serving term periods
+
+GENERAL JKUAT KNOWLEDGE YOU CAN USE:
+- Campus facilities: libraries, laboratories, sports facilities, hostels
+- Student services: health center, counseling, career services
+- Transportation: university buses, proximity to Thika Road
+- Accommodation: on-campus hostels and nearby off-campus options
+- Academic structure: semester system, examination procedures
+- Student life: clubs, sports, cultural activities
+- Admission processes and requirements (general information)
+- Fee structures and financial aid options (general guidance)
+
+RESPONSE STRATEGY:
+1. First check if the context data has the answer → Use it and cite the source
+2. If not in context but you know general JKUAT/JKUSA info → Provide it with disclaimer
+3. If completely outside your knowledge → Politely say you don't have that specific detail
 
 """
     
@@ -226,32 +288,45 @@ ABOUT JKUSA:
     
     if context_data.get("announcements") and len(context_data["announcements"]) > 0:
         prompt += "\n\n📢 RECENT ANNOUNCEMENTS:\n"
-        for ann in context_data["announcements"][:2]:
+        for ann in context_data["announcements"][:3]:
             prompt += f"- {ann['title']} ({ann['date']})\n"
         sections_added.append("Announcements")
     
-    if not sections_added:
-        prompt += "\n\nNo specific context data available for this query."
+    if context_data.get("news") and len(context_data["news"]) > 0:
+        prompt += "\n\n📰 LATEST NEWS:\n"
+        for news in context_data["news"][:3]:
+            summary = news.get('summary', news.get('content', ''))[:200]
+            prompt += f"- {news['title']}: {summary}... ({news['date']})\n"
+        sections_added.append("News")
     
-    prompt += "\n\nAlways respond based on this context and JKUSA guidelines."
+    if not sections_added:
+        prompt += "\n\nNOTE: No current database context available for this specific query."
+        prompt += "\nYou may use your general JKUAT/JKUSA knowledge to answer, but clearly indicate it's general information."
+    
+    prompt += "\n\n---"
+    prompt += "\nREMEMBER: Prioritize context data above, but you CAN provide general JKUAT/JKUSA knowledge if needed."
+    prompt += "\nAlways stay within JKUAT/JKUSA topics only!"
+    
     return prompt
 
 def get_sources_from_context(context_data: dict) -> List[str]:
     """Extract source references from context data."""
     sources = set()
     
-    if context_data.get("events"):
+    if context_data.get("events") and len(context_data["events"]) > 0:
         sources.add("JKUSA Events Database")
-    if context_data.get("activities"):
+    if context_data.get("activities") and len(context_data["activities"]) > 0:
         sources.add("JKUSA Activities Database")
-    if context_data.get("clubs"):
+    if context_data.get("clubs") and len(context_data["clubs"]) > 0:
         sources.add("JKUSA Clubs & Organizations Database")
-    if context_data.get("leadership"):
+    if context_data.get("leadership") and len(context_data["leadership"]) > 0:
         sources.add("JKUSA Leadership Directory")
-    if context_data.get("resources"):
+    if context_data.get("resources") and len(context_data["resources"]) > 0:
         sources.add("JKUSA Resources Library")
-    if context_data.get("announcements"):
+    if context_data.get("announcements") and len(context_data["announcements"]) > 0:
         sources.add("JKUSA Announcements")
+    if context_data.get("news") and len(context_data["news"]) > 0:
+        sources.add("JKUSA News")
     
     return list(sources) if sources else ["JKUSA General Information"]
 
@@ -273,6 +348,10 @@ async def chat_with_ai(
         # Gather context data from database
         logger.info(f"Processing AI query: {chat_message.message[:100]}...")
         context_data = gather_context_data(db, chat_message.message)
+        
+        # Log what context was gathered
+        context_summary = {k: len(v) if isinstance(v, list) else v for k, v in context_data.items()}
+        logger.info(f"Context gathered: {context_summary}")
         
         # Build system prompt
         system_prompt = build_system_prompt(context_data)
@@ -317,7 +396,17 @@ async def chat_with_ai(
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
         
         # Prepare the prompt
-        full_prompt = f"{system_prompt}\n\nUSER QUESTION: {chat_message.message}\n\nPlease provide a helpful response based on the JKUSA context above."
+        full_prompt = f"""{system_prompt}
+
+USER QUESTION: {chat_message.message}
+
+INSTRUCTIONS:
+- If the context above has relevant information, use it and cite the source
+- If the context doesn't have the info but you know general JKUAT/JKUSA information, provide it with: "Based on general JKUAT knowledge..."
+- Only say you don't have information if it's something very specific requiring real-time data
+- Keep your response helpful, friendly, and focused on JKUAT/JKUSA only
+
+Please provide a helpful response:"""
         
         # Generate response with comprehensive error handling
         try:
