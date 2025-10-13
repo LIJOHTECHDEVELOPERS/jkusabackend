@@ -40,6 +40,7 @@ from app.routers.admin_gallery import public_gallery_router
 from app.routers.admin_resource import public_resource_router
 from app.routers.admin_activity import public_activity_router
 from app.routers.admin_club import public_club_router
+from app.routers.admin_subscriber import public_router as public_subscriber_router
 
 
 import logging
@@ -124,6 +125,7 @@ app.include_router(students_sso.router)
 app.include_router(ai_assistant.router) 
 app.include_router(lost_id.router)
 app.include_router(admin_subscriber.router)
+app.include_router(public_subscriber_router)
 
 def read_root():
     logger.debug("Root endpoint accessed")
