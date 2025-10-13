@@ -12,6 +12,7 @@ from app.models.event import Event
 from app.models.resource import Resource
 from app.models.club import Club
 from app.models.student import student
+from app.models.lost_id import LostID, IDType, IDStatus, Station
 # Import any other models you have (News, Announcement, etc.)
 
 from app.routers import (
@@ -26,7 +27,9 @@ from app.routers import (
     admin_activity,
     admin_club,
     students_sso,
-    ai_assistant  # NEW: AI Assistant router
+    ai_assistant,
+    lost_id
+         
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
@@ -117,9 +120,9 @@ app.include_router(public_activity_router)
 app.include_router(admin_club.router)
 app.include_router(public_club_router)
 app.include_router(students_sso.router)
-app.include_router(ai_assistant.router)  # NEW: Include AI Assistant router
+app.include_router(ai_assistant.router) 
+app.include_router(lost_id.router)
 
-@app.get("/")
 def read_root():
     logger.debug("Root endpoint accessed")
     return {
