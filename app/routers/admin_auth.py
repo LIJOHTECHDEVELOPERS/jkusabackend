@@ -7,7 +7,7 @@ import logging
 from app.database import get_db
 from app.models.admin import Admin as AdminModel
 from app.models.admin_role import AdminRole
-from app.schemas.admin import AdminCreate, Admin as AdminSchema, TokenWithUser, AdminListResponse
+from app.schemas.admin import Admin as AdminSchema, TokenWithUser, AdminListResponse
 from app.auth.auth import verify_password, get_password_hash, create_access_token, get_current_admin
 from app.auth.permissions import require_manage_admins, check_permission
 
@@ -18,6 +18,17 @@ router = APIRouter(prefix="/admin/auth", tags=["admin_auth"])
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+# New Update Schema for partial updates
+class AdminUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    role_id: Optional[int] = None
+    is_active: Optional[bool] = None
 
 # Helper functions
 def get_admin_by_identifier(db: Session, identifier: str):
@@ -252,7 +263,7 @@ def get_admin(
 @router.put("/admins/{admin_id}", response_model=dict)
 def update_admin(
     admin_id: int,
-    admin_update: AdminCreate,
+    admin_update: AdminUpdate,
     db: Session = Depends(get_db),
     current_admin: AdminModel = Depends(get_current_admin)
 ):
@@ -331,7 +342,8 @@ def update_admin(
         
         for field, value in update_data.items():
             if field == "password":
-                admin.hashed_password = get_password_hash(value)
+                if value:  # Only update if provided
+                    admin.hashed_password = get_password_hash(value)
             else:
                 setattr(admin, field, value)
         
@@ -507,7 +519,7 @@ def get_current_admin_info(current_admin: AdminModel = Depends(get_current_admin
 
 @router.put("/me", response_model=dict)
 def update_current_admin(
-    admin_update: AdminCreate,
+    admin_update: AdminUpdate,  # Use AdminUpdate here as well for consistency
     db: Session = Depends(get_db),
     current_admin: AdminModel = Depends(get_current_admin)
 ):
@@ -535,7 +547,8 @@ def update_current_admin(
         
         for field, value in update_data.items():
             if field == "password":
-                current_admin.hashed_password = get_password_hash(value)
+                if value:  # Only update if provided
+                    current_admin.hashed_password = get_password_hash(value)
             else:
                 setattr(current_admin, field, value)
         
