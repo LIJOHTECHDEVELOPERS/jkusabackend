@@ -5,9 +5,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 import logging
 from app.database import get_db
-from app.models.admin import Admin as AdminModel  # SQLAlchemy model - RENAMED
+from app.models.admin import Admin as AdminModel
 from app.models.admin_role import AdminRole
-from app.schemas.admin import AdminCreate, Admin as AdminSchema, TokenWithUser, AdminListResponse  # Pydantic schema - RENAMED
+from app.schemas.admin import AdminCreate, Admin as AdminSchema, TokenWithUser, AdminListResponse
 from app.auth.auth import verify_password, get_password_hash, create_access_token, get_current_admin
 from app.auth.permissions import require_manage_admins, check_permission
 
@@ -53,6 +53,10 @@ def get_admin_by_id(db: Session, admin_id: int):
     except Exception as e:
         logger.error(f"Error querying admin by ID: {e}")
         return None
+
+def is_super_admin(admin: AdminModel) -> bool:
+    """Check if admin has super_admin role"""
+    return admin.role and admin.role.name == "super_admin"
 
 def format_admin_response(admin: AdminModel) -> dict:
     """Format admin object for response including role"""
@@ -118,7 +122,7 @@ def register_admin(
             )
         
         # Only super admins can create other super admins
-        if role.name == "super_admin" and not current_admin.is_super_admin():
+        if role.name == "super_admin" and not is_super_admin(current_admin):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only super admins can create super admin accounts"
@@ -126,6 +130,9 @@ def register_admin(
     else:
         # Get default role (admin) if not specified
         role = db.query(AdminRole).filter(AdminRole.name == "admin").first()
+        if not role:
+            # If no "admin" role exists, get any non-super_admin role
+            role = db.query(AdminRole).filter(AdminRole.name != "super_admin").first()
     
     try:
         hashed_password = get_password_hash(admin.password)
@@ -302,7 +309,7 @@ def update_admin(
                 )
             
             # Only super admins can assign super_admin role
-            if new_role.name == "super_admin" and not current_admin.is_super_admin():
+            if new_role.name == "super_admin" and not is_super_admin(current_admin):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Only super admins can assign super_admin role"
