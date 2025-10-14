@@ -533,7 +533,7 @@ def update_current_admin(
                 setattr(current_admin, field, value)
         
         if hasattr(current_admin, 'updated_at'):
-            current_admin.updated_at = func.now()
+            admin.updated_at = func.now()
         
         db.commit()
         db.refresh(current_admin)
