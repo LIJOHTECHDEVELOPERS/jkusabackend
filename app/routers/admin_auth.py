@@ -7,7 +7,7 @@ import logging
 from app.database import get_db
 from app.models.admin import Admin as AdminModel
 from app.models.admin_role import AdminRole
-from app.schemas.admin import Admin as AdminSchema, TokenWithUser, AdminListResponse
+from app.schemas.admin import AdminCreate, AdminUpdate, Admin as AdminSchema, TokenWithUser, AdminListResponse
 from app.auth.auth import verify_password, get_password_hash, create_access_token, get_current_admin
 from app.auth.permissions import require_manage_admins, check_permission
 
@@ -18,17 +18,6 @@ router = APIRouter(prefix="/admin/auth", tags=["admin_auth"])
 class LoginRequest(BaseModel):
     username: str
     password: str
-
-# New Update Schema for partial updates
-class AdminUpdate(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    email: Optional[str] = None
-    phone_number: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-    role_id: Optional[int] = None
-    is_active: Optional[bool] = None
 
 # Helper functions
 def get_admin_by_identifier(db: Session, identifier: str):
@@ -83,7 +72,7 @@ def format_admin_response(admin: AdminModel) -> dict:
             "id": admin.role.id,
             "name": admin.role.name,
             "description": admin.role.description,
-            "permissions": admin.role.permissions
+            "permissions": admin.role.permissions if admin.role.permissions else []
         } if admin.role else None,
         "created_at": getattr(admin, 'created_at', None).isoformat() if getattr(admin, 'created_at', None) else None,
         "updated_at": getattr(admin, 'updated_at', None).isoformat() if getattr(admin, 'updated_at', None) else None,
@@ -342,7 +331,7 @@ def update_admin(
         
         for field, value in update_data.items():
             if field == "password":
-                if value:  # Only update if provided
+                if value:  # Only update password if provided
                     admin.hashed_password = get_password_hash(value)
             else:
                 setattr(admin, field, value)
@@ -519,11 +508,11 @@ def get_current_admin_info(current_admin: AdminModel = Depends(get_current_admin
 
 @router.put("/me", response_model=dict)
 def update_current_admin(
-    admin_update: AdminUpdate,  # Use AdminUpdate here as well for consistency
+    admin_update: AdminUpdate,
     db: Session = Depends(get_db),
     current_admin: AdminModel = Depends(get_current_admin)
 ):
-    """Update current admin's own information (cannot change own role)"""
+    """Update current admin's own information (cannot change own role or status)"""
     
     try:
         if admin_update.username and admin_update.username != current_admin.username:
