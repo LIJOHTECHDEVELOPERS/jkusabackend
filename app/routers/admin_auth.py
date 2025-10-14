@@ -7,7 +7,7 @@ import logging
 from app.database import get_db
 from app.models.admin import Admin
 from app.models.admin_role import AdminRole
-from app.schemas.admin import AdminCreate, Admin, Token, TokenWithUser, AdminListResponse
+from app.schemas.admin import AdminCreate, Admin, TokenWithUser, AdminListResponse
 from app.auth.auth import verify_password, get_password_hash, create_access_token, get_current_admin
 from app.auth.permissions import require_manage_admins, check_permission
 
@@ -357,11 +357,11 @@ def update_admin(
             detail="Failed to update admin"
         )
 
-@router.delete("/admins/{admin_id}")
+@router.delete("/admins/{admin_id}", response_model=dict)
 def delete_admin(
     admin_id: int,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(depend_admin)
+    current_admin: Admin = Depends(require_manage_admins)
 ):
     """Delete an admin (soft delete by setting is_active to False)"""
     
@@ -408,7 +408,7 @@ def delete_admin(
             detail="Failed to delete admin"
         )
 
-@router.post("/admins/{admin_id}/activate")
+@router.post("/admins/{admin_id}/activate", response_model=dict)
 def activate_admin(
     admin_id: int,
     db: Session = Depends(get_db),
@@ -571,7 +571,7 @@ def refresh_access_token_alias(current_admin: Admin = Depends(get_current_admin)
     """Refresh access token for current admin (alias for /refresh-token)"""
     return create_token_response(current_admin)
 
-@router.post("/logout")
+@router.post("/logout", response_model=dict)
 def logout():
     """Logout admin (client should discard the token)"""
     return {"message": "Successfully logged out"}
