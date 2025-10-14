@@ -1,18 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 import logging
 from app.database import get_db
 from app.models.admin import Admin
-from app.models.admin_role import AdminRole
-from app.schemas.admin_role import AdminRoleCreate, AdminRoleUpdate, AdminRole
+from app.models.admin_role import AdminRole as AdminRoleModel  # SQLAlchemy model - RENAMED
+from app.schemas.admin_role import AdminRoleCreate, AdminRoleUpdate, AdminRole as AdminRoleSchema  # Pydantic schema - RENAMED
 from app.auth.auth import get_current_admin
 from app.auth.permissions import require_manage_admins, check_permission
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/roles", tags=["admin_roles"])
 
-def format_role_response(role: AdminRole) -> dict:
+def is_super_admin(admin: Admin) -> bool:
+    """Check if admin has super_admin role"""
+    return admin.role and admin.role.name == "super_admin"
+
+def format_role_response(role: AdminRoleModel) -> dict:
     """Format role object for response"""
     return {
         "id": role.id,
@@ -37,7 +42,7 @@ def create_role(
         )
 
     # Check if role name already exists
-    existing_role = db.query(AdminRole).filter(AdminRole.name == role.name).first()
+    existing_role = db.query(AdminRoleModel).filter(AdminRoleModel.name == role.name).first()
     if existing_role:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -45,7 +50,7 @@ def create_role(
         )
 
     try:
-        db_role = AdminRole(
+        db_role = AdminRoleModel(
             name=role.name,
             description=role.description,
             permissions=role.permissions
@@ -77,14 +82,14 @@ def list_roles(
 ):
     """List all roles with pagination and filtering"""
     try:
-        query = db.query(AdminRole)
+        query = db.query(AdminRoleModel)
 
         # Apply search filter
         if search:
             query = query.filter(
-                db.or_(
-                    AdminRole.name.ilike(f"%{search}%"),
-                    AdminRole.description.ilike(f"%{search}%")
+                or_(
+                    AdminRoleModel.name.ilike(f"%{search}%"),
+                    AdminRoleModel.description.ilike(f"%{search}%")
                 )
             )
 
@@ -92,14 +97,14 @@ def list_roles(
         total = query.count()
 
         # Apply sorting
-        if hasattr(AdminRole, sort_by):
-            sort_column = getattr(AdminRole, sort_by)
+        if hasattr(AdminRoleModel, sort_by):
+            sort_column = getattr(AdminRoleModel, sort_by)
             if sort_order == "desc":
                 query = query.order_by(sort_column.desc())
             else:
                 query = query.order_by(sort_column.asc())
         else:
-            query = query.order_by(AdminRole.created_at.desc())
+            query = query.order_by(AdminRoleModel.created_at.desc())
 
         # Apply pagination
         offset = (page - 1) * per_page
@@ -134,7 +139,7 @@ def get_role(
     current_admin: Admin = Depends(get_current_admin)
 ):
     """Get a specific role by ID"""
-    role = db.query(AdminRole).filter(AdminRole.id == role_id).first()
+    role = db.query(AdminRoleModel).filter(AdminRoleModel.id == role_id).first()
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -156,7 +161,7 @@ def update_role(
             detail="Insufficient permissions to update roles"
         )
 
-    role = db.query(AdminRole).filter(AdminRole.id == role_id).first()
+    role = db.query(AdminRoleModel).filter(AdminRoleModel.id == role_id).first()
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -164,7 +169,7 @@ def update_role(
         )
 
     # Prevent modifying super_admin role unless current admin is super_admin
-    if role.name == "super_admin" and not current_admin.is_super_admin():
+    if role.name == "super_admin" and not is_super_admin(current_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only super admins can modify the super_admin role"
@@ -173,7 +178,7 @@ def update_role(
     try:
         # Check if name is being updated and if it's already taken
         if role_update.name and role_update.name != role.name:
-            existing_role = db.query(AdminRole).filter(AdminRole.name == role_update.name).first()
+            existing_role = db.query(AdminRoleModel).filter(AdminRoleModel.name == role_update.name).first()
             if existing_role:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -185,7 +190,10 @@ def update_role(
         for field, value in update_data.items():
             setattr(role, field, value)
 
-        role.updated_at = db.func.now()
+        if hasattr(role, 'updated_at'):
+            from sqlalchemy import func
+            role.updated_at = func.now()
+        
         db.commit()
         db.refresh(role)
 
@@ -217,7 +225,7 @@ def delete_role(
             detail="Insufficient permissions to delete roles"
         )
 
-    role = db.query(AdminRole).filter(AdminRole.id == role_id).first()
+    role = db.query(AdminRoleModel).filter(AdminRoleModel.id == role_id).first()
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -236,7 +244,7 @@ def delete_role(
     if assigned_admins > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete role assigned to admins"
+            detail=f"Cannot delete role assigned to {assigned_admins} admin(s). Please reassign them first."
         )
 
     try:
@@ -250,3 +258,35 @@ def delete_role(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete role"
         )
+
+@router.get("/permissions/available", response_model=dict)
+def list_available_permissions(
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """List all available permissions that can be assigned to roles"""
+    available_permissions = [
+        "manage_admins",
+        "manage_roles",
+        "manage_users",
+        "manage_news",
+        "manage_events",
+        "manage_announcements",
+        "manage_settings",
+        "view_reports",
+        "manage_payments"
+    ]
+    
+    return {
+        "permissions": available_permissions,
+        "description": {
+            "manage_admins": "Create, update, and delete admin users",
+            "manage_roles": "Create and modify roles and permissions",
+            "manage_users": "Manage regular application users",
+            "manage_news": "Create, edit, and delete news articles",
+            "manage_events": "Create, edit, and delete events",
+            "manage_announcements": "Create, edit, and delete announcements",
+            "manage_settings": "Modify system settings",
+            "view_reports": "Access reports and analytics",
+            "manage_payments": "Handle payment-related operations"
+        }
+    }
