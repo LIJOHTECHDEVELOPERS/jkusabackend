@@ -10,11 +10,21 @@ class AdminCreate(BaseModel):
     password: str
     role_id: Optional[int] = None
 
+class AdminUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    role_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
 class AdminRoleInfo(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    permissions: Optional[Dict] = None
+    permissions: Optional[List[str]] = None  # Changed to List[str] to match frontend expectation
     
     class Config:
         from_attributes = True
@@ -49,3 +59,5 @@ class AdminListResponse(BaseModel):
     page: int
     per_page: int
     total_pages: int
+    has_next: bool
+    has_prev: bool

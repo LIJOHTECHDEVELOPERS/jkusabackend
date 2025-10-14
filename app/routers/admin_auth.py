@@ -72,7 +72,7 @@ def format_admin_response(admin: AdminModel) -> dict:
             "id": admin.role.id,
             "name": admin.role.name,
             "description": admin.role.description,
-            "permissions": admin.role.permissions if admin.role.permissions else []
+            "permissions": admin.role.permissions if admin.role and admin.role.permissions else []
         } if admin.role else None,
         "created_at": getattr(admin, 'created_at', None).isoformat() if getattr(admin, 'created_at', None) else None,
         "updated_at": getattr(admin, 'updated_at', None).isoformat() if getattr(admin, 'updated_at', None) else None,
@@ -536,7 +536,7 @@ def update_current_admin(
         
         for field, value in update_data.items():
             if field == "password":
-                if value:  # Only update if provided
+                if value:  # Only update password if provided
                     current_admin.hashed_password = get_password_hash(value)
             else:
                 setattr(current_admin, field, value)
