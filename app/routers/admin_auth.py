@@ -5,9 +5,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 import logging
 from app.database import get_db
-from app.models.admin import Admin
+from app.models.admin import Admin as AdminModel  # SQLAlchemy model - RENAMED
 from app.models.admin_role import AdminRole
-from app.schemas.admin import AdminCreate, Admin, TokenWithUser, AdminListResponse
+from app.schemas.admin import AdminCreate, Admin as AdminSchema, TokenWithUser, AdminListResponse  # Pydantic schema - RENAMED
 from app.auth.auth import verify_password, get_password_hash, create_access_token, get_current_admin
 from app.auth.permissions import require_manage_admins, check_permission
 
@@ -23,8 +23,8 @@ class LoginRequest(BaseModel):
 def get_admin_by_identifier(db: Session, identifier: str):
     """Get admin by username or email"""
     try:
-        return db.query(Admin).filter(
-            or_(Admin.username == identifier, Admin.email == identifier)
+        return db.query(AdminModel).filter(
+            or_(AdminModel.username == identifier, AdminModel.email == identifier)
         ).first()
     except Exception as e:
         logger.error(f"Error querying admin by identifier: {e}")
@@ -33,7 +33,7 @@ def get_admin_by_identifier(db: Session, identifier: str):
 def get_admin_by_username(db: Session, username: str):
     """Get admin by username only"""
     try:
-        return db.query(Admin).filter(Admin.username == username).first()
+        return db.query(AdminModel).filter(AdminModel.username == username).first()
     except Exception as e:
         logger.error(f"Error querying admin by username: {e}")
         return None
@@ -41,7 +41,7 @@ def get_admin_by_username(db: Session, username: str):
 def get_admin_by_email(db: Session, email: str):
     """Get admin by email only"""
     try:
-        return db.query(Admin).filter(Admin.email == email).first()
+        return db.query(AdminModel).filter(AdminModel.email == email).first()
     except Exception as e:
         logger.error(f"Error querying admin by email: {e}")
         return None
@@ -49,12 +49,12 @@ def get_admin_by_email(db: Session, email: str):
 def get_admin_by_id(db: Session, admin_id: int):
     """Get admin by ID"""
     try:
-        return db.query(Admin).filter(Admin.id == admin_id).first()
+        return db.query(AdminModel).filter(AdminModel.id == admin_id).first()
     except Exception as e:
         logger.error(f"Error querying admin by ID: {e}")
         return None
 
-def format_admin_response(admin: Admin) -> dict:
+def format_admin_response(admin: AdminModel) -> dict:
     """Format admin object for response including role"""
     return {
         "id": admin.id,
@@ -74,7 +74,7 @@ def format_admin_response(admin: Admin) -> dict:
         "updated_at": getattr(admin, 'updated_at', None).isoformat() if getattr(admin, 'updated_at', None) else None,
     }
 
-def create_token_response(admin: Admin) -> dict:
+def create_token_response(admin: AdminModel) -> dict:
     """Create standardized token response with user data including role"""
     access_token = create_access_token(data={"sub": admin.username, "type": "admin"})
     return {
@@ -87,7 +87,7 @@ def create_token_response(admin: Admin) -> dict:
 def register_admin(
     admin: AdminCreate, 
     db: Session = Depends(get_db), 
-    current_admin: Admin = Depends(require_manage_admins)
+    current_admin: AdminModel = Depends(require_manage_admins)
 ):
     """Register a new admin (requires manage_admins permission)"""
     
@@ -129,7 +129,7 @@ def register_admin(
     
     try:
         hashed_password = get_password_hash(admin.password)
-        db_admin = Admin(
+        db_admin = AdminModel(
             first_name=admin.first_name,
             last_name=admin.last_name,
             email=admin.email,
@@ -157,7 +157,7 @@ def register_admin(
 @router.get("/admins", response_model=AdminListResponse)
 def list_admins(
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_admin: AdminModel = Depends(get_current_admin),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(10, ge=1, le=100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search by name, username, or email"),
@@ -169,44 +169,44 @@ def list_admins(
     """List all admins with pagination, filtering, and role information"""
     
     try:
-        query = db.query(Admin)
+        query = db.query(AdminModel)
         
         # Apply search filter
         if search:
             search_filter = or_(
-                Admin.first_name.ilike(f"%{search}%"),
-                Admin.last_name.ilike(f"%{search}%"),
-                Admin.username.ilike(f"%{search}%"),
-                Admin.email.ilike(f"%{search}%")
+                AdminModel.first_name.ilike(f"%{search}%"),
+                AdminModel.last_name.ilike(f"%{search}%"),
+                AdminModel.username.ilike(f"%{search}%"),
+                AdminModel.email.ilike(f"%{search}%")
             )
             query = query.filter(search_filter)
         
         # Apply active status filter
         if is_active is not None:
-            query = query.filter(Admin.is_active == is_active)
+            query = query.filter(AdminModel.is_active == is_active)
         
         # Apply role filter
         if role_id is not None:
-            query = query.filter(Admin.role_id == role_id)
+            query = query.filter(AdminModel.role_id == role_id)
         
         total = query.count()
         
         # Apply sorting
-        if hasattr(Admin, sort_by):
-            sort_column = getattr(Admin, sort_by)
+        if hasattr(AdminModel, sort_by):
+            sort_column = getattr(AdminModel, sort_by)
             if sort_order == "desc":
                 query = query.order_by(sort_column.desc())
             else:
                 query = query.order_by(sort_column.asc())
         else:
-            if hasattr(Admin, 'created_at'):
-                query = query.order_by(Admin.created_at.desc())
+            if hasattr(AdminModel, 'created_at'):
+                query = query.order_by(AdminModel.created_at.desc())
         
         offset = (page - 1) * per_page
         admins = query.offset(offset).limit(per_page).all()
         
         total_pages = (total + per_page - 1) // per_page
-        admin_list = [Admin(**format_admin_response(admin)) for admin in admins]
+        admin_list = [AdminSchema(**format_admin_response(admin)) for admin in admins]
         
         return {
             "admins": admin_list,
@@ -225,11 +225,11 @@ def list_admins(
             detail="Failed to retrieve admins"
         )
 
-@router.get("/admins/{admin_id}", response_model=Admin)
+@router.get("/admins/{admin_id}", response_model=AdminSchema)
 def get_admin(
     admin_id: int,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_admin: AdminModel = Depends(get_current_admin)
 ):
     """Get a specific admin by ID with role information"""
     
@@ -240,14 +240,14 @@ def get_admin(
             detail="Admin not found"
         )
     
-    return Admin(**format_admin_response(admin))
+    return AdminSchema(**format_admin_response(admin))
 
 @router.put("/admins/{admin_id}", response_model=dict)
 def update_admin(
     admin_id: int,
     admin_update: AdminCreate,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_admin: AdminModel = Depends(get_current_admin)
 ):
     """Update an admin's information including role"""
     
@@ -310,9 +310,9 @@ def update_admin(
             
             # Prevent removing super_admin from the last super admin
             if admin.role and admin.role.name == "super_admin":
-                super_admin_count = db.query(Admin).join(AdminRole).filter(
+                super_admin_count = db.query(AdminModel).join(AdminRole).filter(
                     AdminRole.name == "super_admin",
-                    Admin.is_active == True
+                    AdminModel.is_active == True
                 ).count()
                 if super_admin_count <= 1 and new_role.name != "super_admin":
                     raise HTTPException(
@@ -354,7 +354,7 @@ def update_admin(
 def delete_admin(
     admin_id: int,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(require_manage_admins)
+    current_admin: AdminModel = Depends(require_manage_admins)
 ):
     """Delete an admin (soft delete by setting is_active to False)"""
     
@@ -373,9 +373,9 @@ def delete_admin(
     
     # Prevent deleting the last super admin
     if admin.role and admin.role.name == "super_admin":
-        super_admin_count = db.query(Admin).join(AdminRole).filter(
+        super_admin_count = db.query(AdminModel).join(AdminRole).filter(
             AdminRole.name == "super_admin",
-            Admin.is_active == True
+            AdminModel.is_active == True
         ).count()
         if super_admin_count <= 1:
             raise HTTPException(
@@ -405,7 +405,7 @@ def delete_admin(
 def activate_admin(
     admin_id: int,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(require_manage_admins)
+    current_admin: AdminModel = Depends(require_manage_admins)
 ):
     """Activate a deactivated admin"""
     
@@ -493,16 +493,16 @@ def login_json(login_data: LoginRequest, db: Session = Depends(get_db)):
             detail=f"Internal server error: {str(e)}"
         )
 
-@router.get("/me", response_model=Admin)
-def get_current_admin_info(current_admin: Admin = Depends(get_current_admin)):
+@router.get("/me", response_model=AdminSchema)
+def get_current_admin_info(current_admin: AdminModel = Depends(get_current_admin)):
     """Get current admin information including role and permissions"""
-    return Admin(**format_admin_response(current_admin))
+    return AdminSchema(**format_admin_response(current_admin))
 
 @router.put("/me", response_model=dict)
 def update_current_admin(
     admin_update: AdminCreate,
     db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_admin: AdminModel = Depends(get_current_admin)
 ):
     """Update current admin's own information (cannot change own role)"""
     
@@ -533,7 +533,7 @@ def update_current_admin(
                 setattr(current_admin, field, value)
         
         if hasattr(current_admin, 'updated_at'):
-            admin.updated_at = func.now()
+            current_admin.updated_at = func.now()
         
         db.commit()
         db.refresh(current_admin)
@@ -555,12 +555,12 @@ def update_current_admin(
         )
 
 @router.post("/refresh-token", response_model=TokenWithUser)
-def refresh_access_token(current_admin: Admin = Depends(get_current_admin)):
+def refresh_access_token(current_admin: AdminModel = Depends(get_current_admin)):
     """Refresh access token for current admin"""
     return create_token_response(current_admin)
 
 @router.post("/refresh", response_model=TokenWithUser)
-def refresh_access_token_alias(current_admin: Admin = Depends(get_current_admin)):
+def refresh_access_token_alias(current_admin: AdminModel = Depends(get_current_admin)):
     """Refresh access token for current admin (alias for /refresh-token)"""
     return create_token_response(current_admin)
 
@@ -569,8 +569,8 @@ def logout():
     """Logout admin (client should discard the token)"""
     return {"message": "Successfully logged out"}
 
-@router.get("/verify-token", response_model=Admin)
-def verify_token(current_admin: Admin = Depends(get_current_admin)):
+@router.get("/verify-token", response_model=AdminSchema)
+def verify_token(current_admin: AdminModel = Depends(get_current_admin)):
     """Verify if the current token is valid and return user info with role"""
     admin_data = format_admin_response(current_admin)
     admin_data.update({
