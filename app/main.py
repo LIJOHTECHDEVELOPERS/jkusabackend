@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # IMPORTANT: Import all models BEFORE creating Base.metadata
 from app.database import engine, Base
 from app.models.admin import Admin
+from app.models.admin_role import AdminRole
 from app.models.activity import Activity
 from app.models.leadership import Leadership, CampusType, LeadershipCategory
 from app.models.gallery import Gallery, GalleryCategory
@@ -13,11 +14,12 @@ from app.models.resource import Resource
 from app.models.club import Club
 from app.models.student import student
 from app.models.lost_id import LostID, IDType, IDStatus, Station
-from app.models.subscriber  import Subscriber
+from app.models.subscriber import Subscriber
 
 from app.routers import (
     user_auth, 
     admin_auth, 
+    admin_roles,
     admin_announcement, 
     admin_leadership, 
     admin_event, 
@@ -30,7 +32,6 @@ from app.routers import (
     ai_assistant,
     lost_id,
     admin_subscriber
-         
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
@@ -41,7 +42,6 @@ from app.routers.admin_resource import public_resource_router
 from app.routers.admin_activity import public_activity_router
 from app.routers.admin_club import public_club_router
 from app.routers.admin_subscriber import public_router as public_subscriber_router
-
 
 import logging
 
@@ -105,6 +105,7 @@ Base.metadata.create_all(bind=engine)
 # Include routers
 app.include_router(user_auth.router)
 app.include_router(admin_auth.router)
+app.include_router(admin_roles.router)
 app.include_router(admin_announcement.router)
 app.include_router(public_announcement_router)
 app.include_router(admin_leadership.router)
@@ -127,6 +128,7 @@ app.include_router(lost_id.router)
 app.include_router(admin_subscriber.router)
 app.include_router(public_subscriber_router)
 
+@app.get("/")
 def read_root():
     logger.debug("Root endpoint accessed")
     return {

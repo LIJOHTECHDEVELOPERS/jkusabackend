@@ -1,0 +1,252 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from typing import List, Optional
+import logging
+from app.database import get_db
+from app.models.admin import Admin
+from app.models.admin_role import AdminRole
+from app.schemas.admin_role import AdminRoleCreate, AdminRoleUpdate, AdminRole
+from app.auth.auth import get_current_admin
+from app.auth.permissions import require_manage_admins, check_permission
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/admin/roles", tags=["admin_roles"])
+
+def format_role_response(role: AdminRole) -> dict:
+    """Format role object for response"""
+    return {
+        "id": role.id,
+        "name": role.name,
+        "description": role.description,
+        "permissions": role.permissions,
+        "created_at": role.created_at.isoformat() if role.created_at else None,
+        "updated_at": role.updated_at.isoformat() if role.updated_at else None
+    }
+
+@router.post("/", response_model=dict)
+def create_role(
+    role: AdminRoleCreate,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_manage_admins)
+):
+    """Create a new role (requires manage_roles permission)"""
+    if not check_permission(current_admin, "manage_roles"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to create roles"
+        )
+
+    # Check if role name already exists
+    existing_role = db.query(AdminRole).filter(AdminRole.name == role.name).first()
+    if existing_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Role name already exists"
+        )
+
+    try:
+        db_role = AdminRole(
+            name=role.name,
+            description=role.description,
+            permissions=role.permissions
+        )
+        db.add(db_role)
+        db.commit()
+        db.refresh(db_role)
+        return {
+            "message": "Role created successfully",
+            "role": format_role_response(db_role)
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating role: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create role"
+        )
+
+@router.get("/", response_model=dict)
+def list_roles(
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: Optional[str] = Query(None, description="Search by name or description"),
+    sort_by: str = Query("created_at", description="Sort by field"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
+):
+    """List all roles with pagination and filtering"""
+    try:
+        query = db.query(AdminRole)
+
+        # Apply search filter
+        if search:
+            query = query.filter(
+                db.or_(
+                    AdminRole.name.ilike(f"%{search}%"),
+                    AdminRole.description.ilike(f"%{search}%")
+                )
+            )
+
+        # Get total count before pagination
+        total = query.count()
+
+        # Apply sorting
+        if hasattr(AdminRole, sort_by):
+            sort_column = getattr(AdminRole, sort_by)
+            if sort_order == "desc":
+                query = query.order_by(sort_column.desc())
+            else:
+                query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(AdminRole.created_at.desc())
+
+        # Apply pagination
+        offset = (page - 1) * per_page
+        roles = query.offset(offset).limit(per_page).all()
+
+        # Calculate total pages
+        total_pages = (total + per_page - 1) // per_page
+
+        # Format response
+        role_list = [format_role_response(role) for role in roles]
+
+        return {
+            "roles": role_list,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1
+        }
+    except Exception as e:
+        logger.error(f"Error listing roles: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve roles"
+        )
+
+@router.get("/{role_id}", response_model=dict)
+def get_role(
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Get a specific role by ID"""
+    role = db.query(AdminRole).filter(AdminRole.id == role_id).first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+    return format_role_response(role)
+
+@router.put("/{role_id}", response_model=dict)
+def update_role(
+    role_id: int,
+    role_update: AdminRoleUpdate,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_manage_admins)
+):
+    """Update a role's information (requires manage_roles permission)"""
+    if not check_permission(current_admin, "manage_roles"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to update roles"
+        )
+
+    role = db.query(AdminRole).filter(AdminRole.id == role_id).first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+
+    # Prevent modifying super_admin role unless current admin is super_admin
+    if role.name == "super_admin" and not current_admin.is_super_admin():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can modify the super_admin role"
+        )
+
+    try:
+        # Check if name is being updated and if it's already taken
+        if role_update.name and role_update.name != role.name:
+            existing_role = db.query(AdminRole).filter(AdminRole.name == role_update.name).first()
+            if existing_role:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Role name already taken"
+                )
+
+        # Update fields that are provided
+        update_data = role_update.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(role, field, value)
+
+        role.updated_at = db.func.now()
+        db.commit()
+        db.refresh(role)
+
+        return {
+            "message": "Role updated successfully",
+            "role": format_role_response(role)
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating role: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update role"
+        )
+
+@router.delete("/{role_id}", response_model=dict)
+def delete_role(
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(require_manage_admins)
+):
+    """Delete a role (requires manage_roles permission)"""
+    if not check_permission(current_admin, "manage_roles"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to delete roles"
+        )
+
+    role = db.query(AdminRole).filter(AdminRole.id == role_id).first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found"
+        )
+
+    # Prevent deleting super_admin role
+    if role.name == "super_admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete super_admin role"
+        )
+
+    # Check if role is assigned to any admins
+    assigned_admins = db.query(Admin).filter(Admin.role_id == role_id).count()
+    if assigned_admins > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete role assigned to admins"
+        )
+
+    try:
+        db.delete(role)
+        db.commit()
+        return {"message": "Role deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting role: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete role"
+        )
