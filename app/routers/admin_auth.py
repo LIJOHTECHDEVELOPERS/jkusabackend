@@ -10,6 +10,7 @@ from app.models.admin_role import AdminRole
 from app.schemas.admin import AdminCreate, AdminUpdate, Admin as AdminSchema, TokenWithUser, AdminListResponse
 from app.auth.auth import verify_password, get_password_hash, create_access_token, get_current_admin
 from app.auth.permissions import require_manage_admins, check_permission
+from app.auth.utils import is_super_admin  # Import is_super_admin from utils
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/auth", tags=["admin_auth"])
@@ -54,18 +55,12 @@ def get_admin_by_id(db: Session, admin_id: int):
         logger.error(f"Error querying admin by ID: {e}")
         return None
 
-def is_super_admin(admin: AdminModel) -> bool:
-    """Check if admin has super_admin role"""
-    return admin.role and admin.role.name == "super_admin"
-
 def format_admin_response(admin: AdminModel) -> dict:
     """Format admin object for response including role"""
     permissions = []
     if admin.role and admin.role.permissions:
         if isinstance(admin.role.permissions, dict):
-            # Handle legacy dictionary permissions (e.g., {'all': True})
             if admin.role.permissions.get('all', False):
-                # Define all possible permissions for super_admin
                 permissions = ["manage_admins", "manage_users", "view_reports", "edit_content"]
             else:
                 permissions = list(admin.role.permissions.keys())

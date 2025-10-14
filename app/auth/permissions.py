@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from app.models.admin import Admin as AdminModel
 from app.auth.auth import get_current_admin
-from app.routers.admin_auth import is_super_admin  # Import is_super_admin
+from app.auth.utils import is_super_admin  # Import from utils
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ def check_permission(admin: AdminModel, permission: str) -> bool:
     """
     try:
         # Super admins have all permissions
-        if is_super_admin(admin):  # Use standalone function
+        if is_super_admin(admin):
             logger.debug(f"Admin {admin.username} is super_admin, granting permission: {permission}")
             return True
         
@@ -42,7 +42,7 @@ def require_manage_admins(current_admin: AdminModel = Depends(get_current_admin)
     Raises HTTPException if permission is not granted.
     """
     try:
-        if not (is_super_admin(current_admin) or check_permission(current_admin, "manage_admins")):  # Use standalone function
+        if not (is_super_admin(current_admin) or check_permission(current_admin, "manage_admins")):
             logger.warning(f"Admin {current_admin.username} denied access to manage admins")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -65,7 +65,7 @@ def require_manage_roles(current_admin: AdminModel = Depends(get_current_admin))
     Raises HTTPException if permission is not granted.
     """
     try:
-        if not (is_super_admin(current_admin) or check_permission(current_admin, "manage_roles")):  # Use standalone function
+        if not (is_super_admin(current_admin) or check_permission(current_admin, "manage_roles")):
             logger.warning(f"Admin {current_admin.username} denied access to manage roles")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
