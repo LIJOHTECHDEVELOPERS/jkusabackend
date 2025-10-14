@@ -60,6 +60,18 @@ def is_super_admin(admin: AdminModel) -> bool:
 
 def format_admin_response(admin: AdminModel) -> dict:
     """Format admin object for response including role"""
+    permissions = []
+    if admin.role and admin.role.permissions:
+        if isinstance(admin.role.permissions, dict):
+            # Handle legacy dictionary permissions (e.g., {'all': True})
+            if admin.role.permissions.get('all', False):
+                # Define all possible permissions for super_admin
+                permissions = ["manage_admins", "manage_users", "view_reports", "edit_content"]
+            else:
+                permissions = list(admin.role.permissions.keys())
+        else:
+            permissions = admin.role.permissions
+
     return {
         "id": admin.id,
         "username": admin.username,
@@ -72,7 +84,7 @@ def format_admin_response(admin: AdminModel) -> dict:
             "id": admin.role.id,
             "name": admin.role.name,
             "description": admin.role.description,
-            "permissions": admin.role.permissions if admin.role and admin.role.permissions else []
+            "permissions": permissions
         } if admin.role else None,
         "created_at": getattr(admin, 'created_at', None).isoformat() if getattr(admin, 'created_at', None) else None,
         "updated_at": getattr(admin, 'updated_at', None).isoformat() if getattr(admin, 'updated_at', None) else None,
