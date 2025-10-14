@@ -1,26 +1,34 @@
 from fastapi import Depends, HTTPException, status
-from app.models.admin import Admin
+from app.models.admin import Admin as AdminModel
 from app.auth.auth import get_current_admin
+from app.routers.admin_auth import is_super_admin  # Import is_super_admin
 import logging
 
 logger = logging.getLogger(__name__)
 
-def check_permission(admin: Admin, permission: str) -> bool:
+def check_permission(admin: AdminModel, permission: str) -> bool:
     """
     Check if the admin has the specified permission.
     Returns True if the admin is a super_admin or has the permission in their role.
     """
     try:
         # Super admins have all permissions
-        if admin.is_super_admin():
+        if is_super_admin(admin):  # Use standalone function
             logger.debug(f"Admin {admin.username} is super_admin, granting permission: {permission}")
             return True
         
         # Check if the admin has a role and the specified permission
         if admin.role and admin.role.permissions:
-            has_permission = admin.role.permissions.get(permission, False) or admin.role.permissions.get("all", False)
-            logger.debug(f"Checking permission {permission} for admin {admin.username}: {has_permission}")
-            return has_permission
+            if isinstance(admin.role.permissions, dict):
+                # Handle dictionary permissions (legacy)
+                has_permission = admin.role.permissions.get(permission, False) or admin.role.permissions.get("all", False)
+                logger.debug(f"Checking permission {permission} for admin {admin.username}: {has_permission}")
+                return has_permission
+            elif isinstance(admin.role.permissions, list):
+                # Handle list permissions
+                has_permission = permission in admin.role.permissions
+                logger.debug(f"Checking permission {permission} for admin {admin.username}: {has_permission}")
+                return has_permission
         
         logger.debug(f"Admin {admin.username} has no role or permissions defined")
         return False
@@ -28,13 +36,13 @@ def check_permission(admin: Admin, permission: str) -> bool:
         logger.error(f"Error checking permission {permission} for admin {admin.username}: {e}")
         return False
 
-def require_manage_admins(current_admin: Admin = Depends(get_current_admin)):
+def require_manage_admins(current_admin: AdminModel = Depends(get_current_admin)):
     """
     Dependency to ensure the current admin has manage_admins permission or is a super_admin.
     Raises HTTPException if permission is not granted.
     """
     try:
-        if not (current_admin.is_super_admin() or check_permission(current_admin, "manage_admins")):
+        if not (is_super_admin(current_admin) or check_permission(current_admin, "manage_admins")):  # Use standalone function
             logger.warning(f"Admin {current_admin.username} denied access to manage admins")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -51,13 +59,13 @@ def require_manage_admins(current_admin: Admin = Depends(get_current_admin)):
             detail="Internal server error while checking permissions"
         )
 
-def require_manage_roles(current_admin: Admin = Depends(get_current_admin)):
+def require_manage_roles(current_admin: AdminModel = Depends(get_current_admin)):
     """
     Dependency to ensure the current admin has manage_roles permission or is a super_admin.
     Raises HTTPException if permission is not granted.
     """
     try:
-        if not (current_admin.is_super_admin() or check_permission(current_admin, "manage_roles")):
+        if not (is_super_admin(current_admin) or check_permission(current_admin, "manage_roles")):  # Use standalone function
             logger.warning(f"Admin {current_admin.username} denied access to manage roles")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
