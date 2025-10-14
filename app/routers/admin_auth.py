@@ -28,14 +28,7 @@ def get_admin_by_identifier(db: Session, identifier: str):
         ).first()
     except Exception as e:
         logger.error(f"Error querying admin by identifier: {e}")
-        try:
-            admin = db.query(Admin).filter(Admin.username == identifier).first()
-            if admin:
-                return admin
-            return db.query(Admin).filter(Admin.email == identifier).first()
-        except Exception as fallback_error:
-            logger.error(f"Fallback query also failed: {fallback_error}")
-            return None
+        return None
 
 def get_admin_by_username(db: Session, username: str):
     """Get admin by username only"""
