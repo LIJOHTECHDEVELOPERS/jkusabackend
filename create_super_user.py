@@ -2,9 +2,6 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.models.admin import Admin
-from app.models.admin_role import AdminRole
-from app.auth.auth import get_password_hash
 import logging
 from datetime import datetime
 
@@ -21,14 +18,33 @@ if not SQLALCHEMY_DATABASE_URL:
     logger.error("DATABASE_URL environment variable is not set")
     raise ValueError("DATABASE_URL environment variable is not set. Please set it in the .env file.")
 
-# Create database engine and session
+# Create database engine (without committing to session yet)
 try:
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     logger.info("Database engine created successfully")
 except Exception as e:
     logger.error(f"Failed to create database engine: {e}")
     raise
+
+# Import ALL models AFTER engine creation but BEFORE session usage
+# This ensures all models are loaded and relationships can be resolved
+try:
+    # Import all related models first to resolve relationships
+    from app.models.news import News
+    from app.models.activity import Activity
+    from app.models.resource import Resource
+    from app.models.admin_role import AdminRole
+    # Import Admin last since it depends on the others
+    from app.models.admin import Admin
+    from app.auth.auth import get_password_hash
+    logger.info("All models imported successfully")
+except ImportError as e:
+    logger.error(f"Failed to import models: {e}")
+    logger.error("Make sure News, Activity, and Resource models exist")
+    raise
+
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def create_super_admin():
     """Create a super admin user if it doesn't exist"""
