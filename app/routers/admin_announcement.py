@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
 from app.models.announcement import Announcement
-from app.models.student import student  # Correct import for lowercase student
+from app.models.student import student as StudentModel  # Renamed import to avoid conflict
 from app.schemas.announcement import Announcement as AnnouncementSchema, AnnouncementCreate
 from app.auth.auth import get_current_admin
 from app.services.s3_service import s3_service
@@ -99,22 +99,22 @@ async def create_announcement(
         db.commit()
         db.refresh(db_announcement)
         
-        # Get all active students
-        students = db.query(student).filter(student.is_active == True).all()  # Using lowercase student
+        # Get all active students - using renamed StudentModel
+        students = db.query(StudentModel).filter(StudentModel.is_active == True).all()
         email_results = []
         
-        # Send emails to all active students
+        # Send emails to all active students - using different variable name
         admin_name = f"{current_admin.first_name} {current_admin.last_name}"
-        for student in students:
+        for student_record in students:  # Changed variable name from 'student' to 'student_record'
             success = send_announcement_email(
-                to_email=student.email,
+                to_email=student_record.email,
                 title=title,
                 content=content,
                 image_url=image_url,
                 admin_name=admin_name
             )
             email_results.append({
-                "email": student.email,
+                "email": student_record.email,
                 "success": success
             })
         
@@ -203,22 +203,22 @@ async def update_announcement(
         db.commit()
         db.refresh(db_announcement)
         
-        # Get all active students
-        students = db.query(student).filter(student.is_active == True).all()  # Using lowercase student
+        # Get all active students - using renamed StudentModel
+        students = db.query(StudentModel).filter(StudentModel.is_active == True).all()
         email_results = []
         
-        # Send emails to all active students
+        # Send emails to all active students - using different variable name
         admin_name = f"{current_admin.first_name} {current_admin.last_name}"
-        for student in students:
+        for student_record in students:  # Changed variable name from 'student' to 'student_record'
             success = send_announcement_email(
-                to_email=student.email,
+                to_email=student_record.email,
                 title=title,
                 content=content,
                 image_url=new_image_url or old_image_url,
                 admin_name=admin_name
             )
             email_results.append({
-                "email": student.email,
+                "email": student_record.email,
                 "success": success
             })
         
