@@ -23,6 +23,7 @@ class Admin(Base):
     published_news = relationship("News", back_populates="publisher", cascade="all, delete-orphan")
     published_activities = relationship("Activity", back_populates="publisher")
     published_resources = relationship("Resource", back_populates="publisher", cascade="all, delete-orphan")
+    announcements = relationship("Announcement", back_populates="admin", cascade="all, delete-orphan")  # Added relationship
     
     def is_super_admin(self):
         """Check if admin has super_admin role"""

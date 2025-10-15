@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
 from app.models.announcement import Announcement
-from app.models.student import student  # Added student model import
+from app.models.student import student
 from app.schemas.announcement import Announcement as AnnouncementSchema, AnnouncementCreate
 from app.auth.auth import get_current_admin
 from app.services.s3_service import s3_service
@@ -92,8 +92,8 @@ async def create_announcement(
             title=title,
             content=content,
             image_url=image_url,
-            announced_at=datetime.utcnow(),
-            admin_id=current_admin.id  # Store admin ID
+            admin_id=current_admin.id,
+            announced_at=datetime.utcnow()
         )
         db.add(db_announcement)
         db.commit()
@@ -273,8 +273,6 @@ async def update_announcement(
             "message": f"Error updating announcement: {str(e)}",
             "code": "SERVER_ERROR"
         })
-
-# [Rest of the endpoints remain unchanged]
 
 @admin_router.get("/{announcement_id}", response_model=AnnouncementSchema)
 def read_announcement(
