@@ -53,6 +53,7 @@ const Dashboard: FC = () => {
   const [publicEvents, setPublicEvents] = useState<Event[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [collegeName, setCollegeName] = useState('')
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [loadingActivities, setLoadingActivities] = useState(true)
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true)
@@ -63,6 +64,22 @@ const Dashboard: FC = () => {
       navigate('/signin')
     }
   }, [user, navigate])
+
+  // Fetch college name
+  useEffect(() => {
+    const fetchCollegeName = async () => {
+      if (user?.college_id) {
+        try {
+          const response = await fetch(`https://backend.jkusa.org/colleges/${user.college_id}/`)
+          const data = await response.json()
+          setCollegeName(data.name || '')
+        } catch (error) {
+          console.error('Error fetching college name:', error)
+        }
+      }
+    }
+    fetchCollegeName()
+  }, [user])
 
   // Fetch public events
   useEffect(() => {
@@ -105,7 +122,10 @@ const Dashboard: FC = () => {
         const response = await fetch('https://backend.jkusa.org/announcements/')
         const data = await response.json()
         const announcementsData = Array.isArray(data) ? data : data.items || []
-        setAnnouncements(announcementsData.slice(0, 5))
+        const oneMonthAgo = new Date()
+        oneMonthAgo.setDate(oneMonthAgo.getDate() - 30)
+        const recentAnnouncements = announcementsData.filter((a: Announcement) => new Date(a.announced_at) >= oneMonthAgo)
+        setAnnouncements(recentAnnouncements)
       } catch (error) {
         console.error('Error fetching announcements:', error)
       } finally {
@@ -133,12 +153,12 @@ const Dashboard: FC = () => {
       icon: CalendarIcon
     },
     {
-      label: 'Active Membership',
-      value: 'Gold',
-      change: 'Valid Till Dec',
+      label: 'Account Active',
+      value: 'Yes',
+      change: 'Gold Asso.',
       trend: 'neutral',
       color: 'green',
-      icon: TicketIcon
+      icon: CheckCircleIcon
     },
     {
       label: 'Announcements',
@@ -279,9 +299,9 @@ const Dashboard: FC = () => {
                     <BuildingOffice2Icon className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-500 mb-1">College ID</p>
+                    <p className="text-xs text-gray-500 mb-1">College Name</p>
                     <p className="font-semibold text-gray-900 text-sm truncate">
-                      {user?.college_id}
+                      {collegeName || 'Loading...'}
                     </p>
                   </div>
                 </div>
@@ -344,7 +364,10 @@ const Dashboard: FC = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold text-gray-900">Recent Activities</h3>
-                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                <button 
+                  onClick={() => window.location.href = 'https://jkusa.org/calender'}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
                   View All
                 </button>
               </div>
@@ -428,14 +451,20 @@ const Dashboard: FC = () => {
                             </p>
                           )}
                           <p className="text-xs text-gray-400 mb-3">📍 {event.location}</p>
-                          <button className="w-full mt-2 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors">
+                          <button 
+                            onClick={() => window.location.href = `https://jkusa.org/events/${event.slug}`}
+                            className="w-full mt-2 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors"
+                          >
                             View Details
                           </button>
                         </div>
                       )
                     })}
                   </div>
-                  <button className="w-full mt-4 py-2.5 text-sm text-green-600 hover:text-green-700 font-medium hover:bg-green-50 rounded-lg transition-colors">
+                  <button 
+                    onClick={() => window.location.href = 'https://jkusa.org/events'}
+                    className="w-full mt-4 py-2.5 text-sm text-green-600 hover:text-green-700 font-medium hover:bg-green-50 rounded-lg transition-colors"
+                  >
                     Browse All Events
                   </button>
                 </>
@@ -461,41 +490,36 @@ const Dashboard: FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                 </div>
               ) : announcements.length > 0 ? (
-                <>
-                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                    {announcements.map((announcement) => (
-                      <div
-                        key={announcement.id}
-                        className="p-4 rounded-lg border border-red-100 bg-red-50 transition-all cursor-pointer hover:shadow-md"
-                      >
-                        {announcement.image_url && (
-                          <img
-                            src={announcement.image_url}
-                            alt={announcement.title}
-                            className="w-full h-24 object-cover rounded-lg mb-3"
-                          />
-                        )}
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <p className="text-sm font-medium text-gray-900 flex-1">
-                            {announcement.title}
-                          </p>
-                          <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full flex-shrink-0">
-                            New
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-600 mb-2 line-clamp-3">
-                          {truncateText(stripHtml(announcement.content), 100)}
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                  {announcements.map((announcement) => (
+                    <div
+                      key={announcement.id}
+                      className="p-4 rounded-lg border border-red-100 bg-red-50 transition-all cursor-pointer hover:shadow-md"
+                    >
+                      {announcement.image_url && (
+                        <img
+                          src={announcement.image_url}
+                          alt={announcement.title}
+                          className="w-full h-24 object-cover rounded-lg mb-3"
+                        />
+                      )}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm font-medium text-gray-900 flex-1">
+                          {announcement.title}
                         </p>
-                        <p className="text-xs text-gray-400">
-                          {formatDate(announcement.announced_at)}
-                        </p>
+                        <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full flex-shrink-0">
+                          New
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                  <button className="w-full mt-4 py-2.5 text-sm text-orange-600 hover:text-orange-700 font-medium hover:bg-orange-50 rounded-lg transition-colors">
-                    View All Announcements
-                  </button>
-                </>
+                      <p className="text-xs text-gray-600 mb-2 line-clamp-3">
+                        {truncateText(stripHtml(announcement.content), 100)}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatDate(announcement.announced_at)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   <BellAlertIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -508,21 +532,16 @@ const Dashboard: FC = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-2">
-                <button className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                <button 
+                  onClick={() => window.location.href = 'https://jkusa.org/events'}
+                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                >
                   <CalendarIcon className="w-4 h-4" />
                   Browse Events
                 </button>
                 <button className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                  <UserGroupIcon className="w-4 h-4" />
-                  Join Community
-                </button>
-                <button className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
                   <SpeakerWaveIcon className="w-4 h-4" />
                   Submit Feedback
-                </button>
-                <button className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                  <CurrencyDollarIcon className="w-4 h-4" />
-                  Pay Membership
                 </button>
               </div>
             </div>
