@@ -19,9 +19,192 @@ admin_router = APIRouter(prefix="/admin/announcements", tags=["admin_announcemen
 # Public router for viewing announcements
 public_router = APIRouter(prefix="/announcements", tags=["public_announcements"])
 
+# Helper function to generate modern email HTML template
+def generate_email_html(title: str, content: str, image_url: Optional[str], admin_name: str) -> str:
+    """Generate a modern, international-standard HTML email template with JKUSA branding"""
+    
+    # JKUSA Color Theme
+    PRIMARY_COLOR = "#1a472a"      # Dark Green
+    SECONDARY_COLOR = "#2d5f3f"    # Medium Green
+    ACCENT_COLOR = "#4a9d5f"       # Light Green
+    TEXT_COLOR = "#2c3e50"         # Dark Gray
+    LIGHT_BG = "#f8faf9"           # Very Light Green
+    WHITE = "#ffffff"
+    
+    # Image section with responsive design
+    image_section = ""
+    if image_url:
+        image_section = f"""
+        <tr>
+            <td style="padding: 0;">
+                <img src="{image_url}" alt="Announcement Image" 
+                     style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 12px; margin: 24px 0;" />
+            </td>
+        </tr>
+        """
+    
+    html_template = f"""
+    <!DOCTYPE html>
+    <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="x-apple-disable-message-reformatting">
+        <title>JKUSA Announcement</title>
+        <!--[if mso]>
+        <style type="text/css">
+            body, table, td {{font-family: Arial, Helvetica, sans-serif !important;}}
+        </style>
+        <![endif]-->
+        <style type="text/css">
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            
+            body {{
+                margin: 0;
+                padding: 0;
+                background-color: {LIGHT_BG};
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            }}
+            table {{
+                border-collapse: collapse;
+                border-spacing: 0;
+            }}
+            img {{
+                border: 0;
+                outline: none;
+                text-decoration: none;
+                -ms-interpolation-mode: bicubic;
+            }}
+            .email-container {{
+                max-width: 600px;
+                margin: 0 auto;
+            }}
+            @media only screen and (max-width: 600px) {{
+                .email-container {{
+                    width: 100% !important;
+                }}
+                .mobile-padding {{
+                    padding: 16px !important;
+                }}
+                .mobile-text {{
+                    font-size: 14px !important;
+                    line-height: 1.6 !important;
+                }}
+            }}
+        </style>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: {LIGHT_BG};">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: {LIGHT_BG};">
+            <tr>
+                <td style="padding: 40px 20px;">
+                    <!-- Main Email Container -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" class="email-container" 
+                           style="background-color: {WHITE}; border-radius: 16px; box-shadow: 0 4px 24px rgba(26, 71, 42, 0.08); overflow: hidden; margin: 0 auto;">
+                        
+                        <!-- Header with Brand -->
+                        <tr>
+                            <td style="background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%); padding: 32px 40px; text-align: center;">
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                    <tr>
+                                        <td style="text-align: center;">
+                                            <h1 style="margin: 0; color: {WHITE}; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
+                                                📢 JKUSA
+                                            </h1>
+                                            <p style="margin: 8px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase;">
+                                                Official Announcement
+                                            </p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        
+                        <!-- Main Content -->
+                        <tr>
+                            <td class="mobile-padding" style="padding: 40px;">
+                                <!-- Title -->
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                    <tr>
+                                        <td style="padding-bottom: 24px;">
+                                            <h2 style="margin: 0; color: {PRIMARY_COLOR}; font-size: 24px; font-weight: 700; line-height: 1.3;">
+                                                {title}
+                                            </h2>
+                                        </td>
+                                    </tr>
+                                    
+                                    <!-- Content Box -->
+                                    <tr>
+                                        <td style="background-color: {LIGHT_BG}; padding: 24px; border-radius: 12px; border-left: 4px solid {ACCENT_COLOR};">
+                                            <p class="mobile-text" style="margin: 0; color: {TEXT_COLOR}; font-size: 16px; line-height: 1.7; white-space: pre-wrap;">
+{content}
+                                            </p>
+                                        </td>
+                                    </tr>
+                                    
+                                    <!-- Image -->
+                                    {image_section}
+                                    
+                                    <!-- Posted By -->
+                                    <tr>
+                                        <td style="padding-top: 24px; border-top: 1px solid #e8ebe9;">
+                                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                                <tr>
+                                                    <td style="padding: 16px 0;">
+                                                        <p style="margin: 0; color: {TEXT_COLOR}; font-size: 14px; font-weight: 600;">
+                                                            Posted by:
+                                                        </p>
+                                                        <p style="margin: 4px 0 0 0; color: {ACCENT_COLOR}; font-size: 16px; font-weight: 600;">
+                                                            {admin_name}
+                                                        </p>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        
+                        <!-- Footer -->
+                        <tr>
+                            <td style="background-color: {LIGHT_BG}; padding: 32px 40px; text-align: center; border-top: 1px solid #e8ebe9;">
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                    <tr>
+                                        <td style="text-align: center;">
+                                            <p style="margin: 0 0 16px 0; color: {TEXT_COLOR}; font-size: 16px; font-weight: 600;">
+                                                📱 Stay Connected with JKUSA
+                                            </p>
+                                            <p style="margin: 0; color: #6c757d; font-size: 13px; line-height: 1.6;">
+                                                This is an automated message from JKUSA.<br>
+                                                Please do not reply directly to this email.
+                                            </p>
+                                            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+                                                <p style="margin: 0; color: #6c757d; font-size: 12px;">
+                                                    © {datetime.now().year} JKUSA. All rights reserved.<br>
+                                                    <a href="https://jkusa.org" style="color: {ACCENT_COLOR}; text-decoration: none; font-weight: 600;">
+                                                        Visit our website
+                                                    </a>
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    return html_template
+
 # Helper function to send announcement emails
 def send_announcement_email(to_email: str, title: str, content: str, image_url: Optional[str], admin_name: str) -> bool:
-    """Send announcement email to a student using Zeptomail API"""
+    """Send announcement email to a student using Zeptomail API with modern HTML template"""
     try:
         url = "https://api.zeptomail.com/v1.1/email"
         headers = {
@@ -30,28 +213,13 @@ def send_announcement_email(to_email: str, title: str, content: str, image_url: 
             "Authorization": "Zoho-enczapikey wSsVR61/q0SmC60rmD2lIOY6yFhdVVv0F0go3VWjv3T8TPHH98dowRDIDFLxHPVMFjI7RWYVp+14zBgI2zJYhol/nl8FACiF9mqRe1U4J3x17qnvhDzCXmpUlRaJKogBxgRrnmZoE8kl+g=="
         }
         
-        # Modern HTML email template
-        image_html = f'<img src="{image_url}" alt="Announcement Image" style="max-width: 100%; height: auto; margin: 20px 0; border-radius: 8px;">' if image_url else ''
-        html_body = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
-                <h2 style="color: #333; margin-bottom: 20px;">{title}</h2>
-                <div style="background-color: white; padding: 15px; border-radius: 4px; border: 1px solid #dee2e6;">
-                    <p style="color: #333; line-height: 1.6;">{content}</p>
-                    {image_html}
-                </div>
-                <p style="color: #666; margin-top: 20px;">Posted by: {admin_name}</p>
-                <p style="color: #666; font-size: 12px; margin-top: 20px;">
-                    This is an automated message from JKUSA. Please do not reply directly to this email.
-                </p>
-            </div>
-        </div>
-        """
+        # Generate modern HTML email
+        html_body = generate_email_html(title, content, image_url, admin_name)
         
         payload = {
             "from": {"address": "announcements@jkusa.org"},
             "to": [{"email_address": {"address": to_email, "name": ""}}],
-            "subject": f"JKUSA Announcement: {title}",
+            "subject": f"📢 JKUSA Announcement: {title}",
             "htmlbody": html_body
         }
         
