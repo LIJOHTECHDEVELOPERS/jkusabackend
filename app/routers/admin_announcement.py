@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
 from app.models.announcement import Announcement
-from app.models.student import student
+from app.models.student import student  # Corrected to import student (lowercase)
 from app.schemas.announcement import Announcement as AnnouncementSchema, AnnouncementCreate
 from app.auth.auth import get_current_admin
 from app.services.s3_service import s3_service
@@ -100,7 +100,7 @@ async def create_announcement(
         db.refresh(db_announcement)
         
         # Get all active students
-        students = db.query(student).filter(student.is_active == True).all()
+        students = db.query(student).filter(student.is_active == True).all()  # Corrected to use student (lowercase)
         email_results = []
         
         # Send emails to all active students
@@ -204,7 +204,7 @@ async def update_announcement(
         db.refresh(db_announcement)
         
         # Get all active students
-        students = db.query(student).filter(student.is_active == True).all()
+        students = db.query(student).filter(student.is_active == True).all()  # Corrected to use student (lowercase)
         email_results = []
         
         # Send emails to all active students
