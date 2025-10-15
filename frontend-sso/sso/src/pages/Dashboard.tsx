@@ -1,25 +1,21 @@
 import { FC, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { 
-  AcademicCapIcon, 
-  BuildingOffice2Icon, 
+import {
+  AcademicCapIcon,
+  BuildingOffice2Icon,
   BookOpenIcon,
-  ChartBarIcon,
-  ClockIcon,
   CalendarIcon,
   CurrencyDollarIcon,
   UserGroupIcon,
-  ArrowTrendingUpIcon,
   CheckCircleIcon,
-  ExclamationCircleIcon,
   TicketIcon,
   SpeakerWaveIcon,
   BellAlertIcon,
   UsersIcon,
   SparklesIcon
 } from '@heroicons/react/24/outline'
-import Layout from '../components/Layout'
+import Layout from '../context/Layout'
 
 interface Event {
   id: number
@@ -74,9 +70,8 @@ const Dashboard: FC = () => {
       try {
         const response = await fetch('https://backend.jkusa.org/api/public/events/')
         const data = await response.json()
-        // Handle both array response and paginated response
         const eventsData = Array.isArray(data) ? data : data.items || []
-        setPublicEvents(eventsData.slice(0, 6)) // Show first 6 events
+        setPublicEvents(eventsData.slice(0, 6))
       } catch (error) {
         console.error('Error fetching events:', error)
       } finally {
@@ -93,7 +88,7 @@ const Dashboard: FC = () => {
         const response = await fetch('https://backend.jkusa.org/api/activities/')
         const data = await response.json()
         const activitiesData = Array.isArray(data) ? data : data.items || []
-        setActivities(activitiesData.slice(0, 4)) // Show first 4 activities
+        setActivities(activitiesData.slice(0, 4))
       } catch (error) {
         console.error('Error fetching activities:', error)
       } finally {
@@ -110,7 +105,7 @@ const Dashboard: FC = () => {
         const response = await fetch('https://backend.jkusa.org/api/announcements/')
         const data = await response.json()
         const announcementsData = Array.isArray(data) ? data : data.items || []
-        setAnnouncements(announcementsData.slice(0, 5)) // Show first 5 announcements
+        setAnnouncements(announcementsData.slice(0, 5))
       } catch (error) {
         console.error('Error fetching announcements:', error)
       } finally {
@@ -121,54 +116,54 @@ const Dashboard: FC = () => {
   }, [])
 
   const quickStats = [
-    { 
-      label: 'Events Registered', 
-      value: '0', 
+    {
+      label: 'Events Registered',
+      value: '0',
       change: 'Coming Soon',
       trend: 'neutral',
       color: 'purple',
-      icon: SparklesIcon 
+      icon: SparklesIcon
     },
-    { 
-      label: 'Available Events', 
-      value: publicEvents.length.toString(), 
+    {
+      label: 'Available Events',
+      value: publicEvents.length.toString(),
       change: 'Live Now',
       trend: 'neutral',
       color: 'blue',
-      icon: CalendarIcon 
+      icon: CalendarIcon
     },
-    { 
-      label: 'Active Membership', 
-      value: 'Gold', 
+    {
+      label: 'Active Membership',
+      value: 'Gold',
       change: 'Valid Till Dec',
       trend: 'neutral',
       color: 'green',
-      icon: TicketIcon 
+      icon: TicketIcon
     },
-    { 
-      label: 'Announcements', 
-      value: announcements.length.toString(), 
+    {
+      label: 'Announcements',
+      value: announcements.length.toString(),
       change: 'New Updates',
       trend: 'up',
       color: 'orange',
-      icon: BellAlertIcon 
+      icon: BellAlertIcon
     },
   ]
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     })
   }
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
     })
   }
 
@@ -211,8 +206,8 @@ const Dashboard: FC = () => {
           {quickStats.map((stat, index) => {
             const Icon = stat.icon
             return (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition-all duration-300"
               >
                 <div className="flex items-start justify-between mb-3">
@@ -264,7 +259,6 @@ const Dashboard: FC = () => {
                   </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
                   <p className="text-blue-200 text-xs mb-1">Registration Number</p>
@@ -292,7 +286,6 @@ const Dashboard: FC = () => {
                   </div>
                 </div>
               </div>
-
               <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition-all duration-300 hover:border-purple-200">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -306,7 +299,6 @@ const Dashboard: FC = () => {
                   </div>
                 </div>
               </div>
-
               <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition-all duration-300 hover:border-green-200">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -365,8 +357,8 @@ const Dashboard: FC = () => {
                   {recentActivitiesDisplay.map((activity, index) => {
                     const Icon = activity.icon
                     return (
-                      <div 
-                        key={activity.id} 
+                      <div
+                        key={activity.id}
                         className={`flex items-start gap-4 ${
                           index !== recentActivitiesDisplay.length - 1 ? 'pb-4 border-b border-gray-100' : ''
                         }`}
@@ -413,13 +405,13 @@ const Dashboard: FC = () => {
                     {publicEvents.map((event) => {
                       const eventDate = event.start_datetime || event.date
                       return (
-                        <div 
+                        <div
                           key={event.id}
                           className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer group"
                         >
                           {(event.image_url || event.featured_image_url) && (
-                            <img 
-                              src={event.image_url || event.featured_image_url} 
+                            <img
+                              src={event.image_url || event.featured_image_url}
                               alt={event.title}
                               className="w-full h-32 object-cover rounded-lg mb-3"
                             />
@@ -472,13 +464,13 @@ const Dashboard: FC = () => {
                 <>
                   <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                     {announcements.map((announcement) => (
-                      <div 
+                      <div
                         key={announcement.id}
                         className="p-4 rounded-lg border border-red-100 bg-red-50 transition-all cursor-pointer hover:shadow-md"
                       >
                         {announcement.image_url && (
-                          <img 
-                            src={announcement.image_url} 
+                          <img
+                            src={announcement.image_url}
                             alt={announcement.title}
                             className="w-full h-24 object-cover rounded-lg mb-3"
                           />
