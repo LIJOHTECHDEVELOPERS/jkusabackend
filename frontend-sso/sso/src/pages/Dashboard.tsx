@@ -13,7 +13,7 @@ import {
   UsersIcon,
   SparklesIcon
 } from '@heroicons/react/24/outline'
-import Layout from '../context/Layout'
+import Layout from '../components/Layout'
 
 interface Event {
   id: number
@@ -45,7 +45,7 @@ interface Activity {
   image_url?: string
 }
 
-const Dashboard: FC = () {
+const Dashboard: FC = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [publicEvents, setPublicEvents] = useState<Event[]>([])
