@@ -68,7 +68,7 @@ const Dashboard: FC = () => {
   useEffect(() => {
     const fetchPublicEvents = async () => {
       try {
-        const response = await fetch('https://backend.jkusa.org/api/public/events/')
+        const response = await fetch('https://backend.jkusa.org/events/')
         const data = await response.json()
         const eventsData = Array.isArray(data) ? data : data.items || []
         setPublicEvents(eventsData.slice(0, 6))
@@ -85,7 +85,7 @@ const Dashboard: FC = () => {
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        const response = await fetch('https://backend.jkusa.org/api/activities/')
+        const response = await fetch('https://backend.jkusa.org/activities/')
         const data = await response.json()
         const activitiesData = Array.isArray(data) ? data : data.items || []
         setActivities(activitiesData.slice(0, 4))
@@ -102,7 +102,7 @@ const Dashboard: FC = () => {
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
-        const response = await fetch('https://backend.jkusa.org/api/announcements/')
+        const response = await fetch('https://backend.jkusa.org/announcements/')
         const data = await response.json()
         const announcementsData = Array.isArray(data) ? data : data.items || []
         setAnnouncements(announcementsData.slice(0, 5))
