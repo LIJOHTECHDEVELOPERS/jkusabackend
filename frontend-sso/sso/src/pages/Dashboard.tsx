@@ -1,4 +1,4 @@
-import { FC, useEffect } from 'react'
+import { FC, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { 
@@ -16,13 +16,50 @@ import {
   TicketIcon,
   SpeakerWaveIcon,
   BellAlertIcon,
-  UsersIcon
+  UsersIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline'
 import Layout from '../components/Layout'
+
+interface Event {
+  id: number
+  title: string
+  description: string
+  date?: string
+  start_datetime?: string
+  end_datetime?: string
+  location: string
+  image_url?: string
+  featured_image_url?: string
+  slug?: string
+}
+
+interface Announcement {
+  id: number
+  title: string
+  content: string
+  image_url: string | null
+  announced_at: string
+}
+
+interface Activity {
+  id: number
+  title: string
+  description: string
+  date: string
+  location: string
+  image_url?: string
+}
 
 const Dashboard: FC = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [publicEvents, setPublicEvents] = useState<Event[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [loadingEvents, setLoadingEvents] = useState(true)
+  const [loadingActivities, setLoadingActivities] = useState(true)
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(true)
 
   // Redirect to signin if user is not authenticated
   useEffect(() => {
@@ -31,19 +68,71 @@ const Dashboard: FC = () => {
     }
   }, [user, navigate])
 
+  // Fetch public events
+  useEffect(() => {
+    const fetchPublicEvents = async () => {
+      try {
+        const response = await fetch('https://backend.jkusa.org/api/public/events/')
+        const data = await response.json()
+        // Handle both array response and paginated response
+        const eventsData = Array.isArray(data) ? data : data.items || []
+        setPublicEvents(eventsData.slice(0, 6)) // Show first 6 events
+      } catch (error) {
+        console.error('Error fetching events:', error)
+      } finally {
+        setLoadingEvents(false)
+      }
+    }
+    fetchPublicEvents()
+  }, [])
+
+  // Fetch activities
+  useEffect(() => {
+    const fetchActivities = async () => {
+      try {
+        const response = await fetch('https://backend.jkusa.org/api/activities/')
+        const data = await response.json()
+        const activitiesData = Array.isArray(data) ? data : data.items || []
+        setActivities(activitiesData.slice(0, 4)) // Show first 4 activities
+      } catch (error) {
+        console.error('Error fetching activities:', error)
+      } finally {
+        setLoadingActivities(false)
+      }
+    }
+    fetchActivities()
+  }, [])
+
+  // Fetch announcements
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        const response = await fetch('https://backend.jkusa.org/api/announcements/')
+        const data = await response.json()
+        const announcementsData = Array.isArray(data) ? data : data.items || []
+        setAnnouncements(announcementsData.slice(0, 5)) // Show first 5 announcements
+      } catch (error) {
+        console.error('Error fetching announcements:', error)
+      } finally {
+        setLoadingAnnouncements(false)
+      }
+    }
+    fetchAnnouncements()
+  }, [])
+
   const quickStats = [
     { 
       label: 'Events Registered', 
-      value: '5', 
-      change: '2 Upcoming',
-      trend: 'up',
-      color: 'green',
-      icon: CheckCircleIcon 
+      value: '0', 
+      change: 'Coming Soon',
+      trend: 'neutral',
+      color: 'purple',
+      icon: SparklesIcon 
     },
     { 
       label: 'Available Events', 
-      value: '12', 
-      change: 'This Month',
+      value: publicEvents.length.toString(), 
+      change: 'Live Now',
       trend: 'neutral',
       color: 'blue',
       icon: CalendarIcon 
@@ -53,211 +142,56 @@ const Dashboard: FC = () => {
       value: 'Gold', 
       change: 'Valid Till Dec',
       trend: 'neutral',
-      color: 'purple',
+      color: 'green',
       icon: TicketIcon 
     },
     { 
-      label: 'Community Points', 
-      value: '850', 
-      change: '+120',
+      label: 'Announcements', 
+      value: announcements.length.toString(), 
+      change: 'New Updates',
       trend: 'up',
       color: 'orange',
-      icon: ArrowTrendingUpIcon 
+      icon: BellAlertIcon 
     },
   ]
 
-  const eventsRegistered = [
-    { 
-      id: 1, 
-      title: 'JKUSA Annual Leadership Summit', 
-      date: 'Oct 22, 2025', 
-      time: '9:00 AM',
-      location: 'Main Auditorium',
-      status: 'confirmed',
-      category: 'Leadership'
-    },
-    { 
-      id: 2, 
-      title: 'Tech Innovation Workshop', 
-      date: 'Oct 25, 2025', 
-      time: '2:00 PM',
-      location: 'ICT Lab B',
-      status: 'confirmed',
-      category: 'Technology'
-    },
-    { 
-      id: 3, 
-      title: 'Career Fair & Mentorship Day', 
-      date: 'Nov 5, 2025', 
-      time: '10:00 AM',
-      location: 'Student Center',
-      status: 'waitlist',
-      category: 'Career'
-    },
-    { 
-      id: 4, 
-      title: 'Cultural Night Celebration', 
-      date: 'Nov 12, 2025', 
-      time: '6:00 PM',
-      location: 'Open Grounds',
-      status: 'confirmed',
-      category: 'Cultural'
-    },
-  ]
-
-  const availableEvents = [
-    {
-      id: 5,
-      title: 'Sports Day Extravaganza',
-      date: 'Oct 28, 2025',
-      time: '8:00 AM',
-      location: 'Sports Complex',
-      spotsLeft: 45,
-      totalSpots: 100,
-      category: 'Sports',
-      fee: 'Free'
-    },
-    {
-      id: 6,
-      title: 'Entrepreneurship Bootcamp',
-      date: 'Nov 2, 2025',
-      time: '1:00 PM',
-      location: 'Business Lab',
-      spotsLeft: 12,
-      totalSpots: 30,
-      category: 'Business',
-      fee: 'KES 500'
-    },
-    {
-      id: 7,
-      title: 'Environmental Conservation Drive',
-      date: 'Nov 8, 2025',
-      time: '7:00 AM',
-      location: 'Campus Grounds',
-      spotsLeft: 78,
-      totalSpots: 150,
-      category: 'Community',
-      fee: 'Free'
-    },
-    {
-      id: 8,
-      title: 'Mental Health Awareness Seminar',
-      date: 'Nov 10, 2025',
-      time: '3:00 PM',
-      location: 'Conference Hall',
-      spotsLeft: 23,
-      totalSpots: 50,
-      category: 'Wellness',
-      fee: 'Free'
-    },
-    {
-      id: 9,
-      title: 'Music & Arts Festival',
-      date: 'Nov 18, 2025',
-      time: '5:00 PM',
-      location: 'Student Arena',
-      spotsLeft: 156,
-      totalSpots: 200,
-      category: 'Cultural',
-      fee: 'KES 300'
-    },
-  ]
-
-  const announcements = [
-    {
-      id: 1,
-      title: 'JKUSA Elections 2025 Nominations Open',
-      message: 'Submit your nomination papers by October 30th. Be part of the change!',
-      priority: 'high',
-      date: 'Oct 14, 2025',
-      category: 'Elections'
-    },
-    {
-      id: 2,
-      title: 'New Student Welfare Program Launched',
-      message: 'Free counseling sessions now available every Tuesday and Thursday',
-      priority: 'high',
-      date: 'Oct 13, 2025',
-      category: 'Welfare'
-    },
-    {
-      id: 3,
-      title: 'Campus Wi-Fi Upgrade Complete',
-      message: 'Enjoy faster internet speeds across all campus zones',
-      priority: 'medium',
-      date: 'Oct 12, 2025',
-      category: 'Infrastructure'
-    },
-    {
-      id: 4,
-      title: 'JKUSA Scholarship Applications',
-      message: 'Apply for academic excellence scholarships. Deadline: Nov 15th',
-      priority: 'high',
-      date: 'Oct 10, 2025',
-      category: 'Scholarships'
-    },
-    {
-      id: 5,
-      title: 'New Partnership with Local Businesses',
-      message: 'Student discount cards now valid at 50+ local establishments',
-      priority: 'medium',
-      date: 'Oct 8, 2025',
-      category: 'Benefits'
-    },
-  ]
-
-  const recentActivities = [
-    {
-      id: 1,
-      title: 'Registered for Leadership Summit',
-      description: 'Successfully confirmed your spot',
-      time: '2 hours ago',
-      type: 'registration',
-      icon: TicketIcon,
-      color: 'green'
-    },
-    {
-      id: 2,
-      title: 'Attended Community Service',
-      description: 'Earned 50 community points',
-      time: '1 day ago',
-      type: 'attendance',
-      icon: UsersIcon,
-      color: 'blue'
-    },
-    {
-      id: 3,
-      title: 'Membership Renewed',
-      description: 'Gold tier active until December 2025',
-      time: '3 days ago',
-      type: 'membership',
-      icon: CheckCircleIcon,
-      color: 'purple'
-    },
-    {
-      id: 4,
-      title: 'Voted in Student Poll',
-      description: 'Campus improvement initiatives survey',
-      time: '5 days ago',
-      type: 'engagement',
-      icon: ChartBarIcon,
-      color: 'orange'
-    },
-  ]
-
-  const getCategoryColor = (category: string) => {
-    const colors: { [key: string]: string } = {
-      'Leadership': 'blue',
-      'Technology': 'purple',
-      'Career': 'green',
-      'Cultural': 'pink',
-      'Sports': 'orange',
-      'Business': 'indigo',
-      'Community': 'teal',
-      'Wellness': 'emerald'
-    }
-    return colors[category] || 'gray'
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    })
   }
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })
+  }
+
+  const stripHtml = (html: string) => {
+    const tmp = document.createElement('DIV')
+    tmp.innerHTML = html
+    return tmp.textContent || tmp.innerText || ''
+  }
+
+  const truncateText = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text
+    return text.substr(0, maxLength) + '...'
+  }
+
+  const recentActivitiesDisplay = activities.map(activity => ({
+    id: activity.id,
+    title: activity.title,
+    description: truncateText(stripHtml(activity.description), 50),
+    time: formatDate(activity.date),
+    type: 'activity',
+    icon: UsersIcon,
+    color: 'blue'
+  }))
 
   return (
     <Layout title="Dashboard">
@@ -388,94 +322,73 @@ const Dashboard: FC = () => {
               </div>
             </div>
 
-            {/* Events Registered */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <TicketIcon className="w-5 h-5 text-blue-600" />
-                  My Registered Events
+            {/* Events Registered - Coming Soon */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-sm border-2 border-dashed border-purple-300 p-6">
+              <div className="flex flex-col items-center justify-center text-center py-8">
+                <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                  <SparklesIcon className="w-10 h-10 text-purple-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Event Registration Coming Soon!
                 </h3>
-                <span className="text-sm text-blue-600 font-medium">
-                  {eventsRegistered.length} Events
-                </span>
+                <p className="text-gray-600 max-w-md">
+                  We're working on an amazing event registration system. Soon you'll be able to register for events, track your bookings, and get instant confirmations!
+                </p>
+                <div className="mt-6 flex gap-2">
+                  <span className="px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                    🎯 Track Registrations
+                  </span>
+                  <span className="px-4 py-2 bg-pink-100 text-pink-700 rounded-full text-sm font-medium">
+                    🎟️ Get Tickets
+                  </span>
+                  <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                    ⚡ Instant Confirmation
+                  </span>
+                </div>
               </div>
-              <div className="space-y-3">
-                {eventsRegistered.map((event) => (
-                  <div 
-                    key={event.id}
-                    className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`px-2 py-1 bg-${getCategoryColor(event.category)}-100 text-${getCategoryColor(event.category)}-700 text-xs font-medium rounded-full`}>
-                            {event.category}
-                          </span>
-                          {event.status === 'confirmed' ? (
-                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full flex items-center gap-1">
-                              <CheckCircleIcon className="w-3 h-3" />
-                              Confirmed
-                            </span>
-                          ) : (
-                            <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-full">
-                              Waitlist
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                          {event.title}
-                        </p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-600">
-                          <span className="flex items-center gap-1">
-                            <CalendarIcon className="w-4 h-4" />
-                            {event.date}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <ClockIcon className="w-4 h-4" />
-                            {event.time}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">{event.location}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button className="w-full mt-4 py-2.5 text-sm text-blue-600 hover:text-blue-700 font-medium hover:bg-blue-50 rounded-lg transition-colors">
-                View All My Events
-              </button>
             </div>
 
             {/* Recent Activity */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
+                <h3 className="text-lg font-bold text-gray-900">Recent Activities</h3>
                 <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
                   View All
                 </button>
               </div>
-              <div className="space-y-4">
-                {recentActivities.map((activity, index) => {
-                  const Icon = activity.icon
-                  return (
-                    <div 
-                      key={activity.id} 
-                      className={`flex items-start gap-4 ${
-                        index !== recentActivities.length - 1 ? 'pb-4 border-b border-gray-100' : ''
-                      }`}
-                    >
-                      <div className={`w-10 h-10 bg-${activity.color}-100 rounded-lg flex items-center justify-center flex-shrink-0`}>
-                        <Icon className={`w-5 h-5 text-${activity.color}-600`} />
+              {loadingActivities ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : recentActivitiesDisplay.length > 0 ? (
+                <div className="space-y-4">
+                  {recentActivitiesDisplay.map((activity, index) => {
+                    const Icon = activity.icon
+                    return (
+                      <div 
+                        key={activity.id} 
+                        className={`flex items-start gap-4 ${
+                          index !== recentActivitiesDisplay.length - 1 ? 'pb-4 border-b border-gray-100' : ''
+                        }`}
+                      >
+                        <div className={`w-10 h-10 bg-${activity.color}-100 rounded-lg flex items-center justify-center flex-shrink-0`}>
+                          <Icon className={`w-5 h-5 text-${activity.color}-600`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                          <p className="text-xs text-gray-600 mt-1">{activity.description}</p>
+                          <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                        <p className="text-xs text-gray-600 mt-1">{activity.description}</p>
-                        <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <UsersIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                  <p>No recent activities</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -490,54 +403,56 @@ const Dashboard: FC = () => {
                 </h3>
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {availableEvents.map((event) => {
-                  const spotsPercentage = (event.spotsLeft / event.totalSpots) * 100
-                  return (
-                    <div 
-                      key={event.id}
-                      className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className={`px-2 py-1 bg-${getCategoryColor(event.category)}-100 text-${getCategoryColor(event.category)}-700 text-xs font-medium rounded-full`}>
-                          {event.category}
-                        </span>
-                        <span className="text-xs font-semibold text-green-600">
-                          {event.fee}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 group-hover:text-green-600 transition-colors mb-2">
-                        {event.title}
-                      </p>
-                      <p className="text-xs text-gray-500 mb-2">{event.date} • {event.time}</p>
-                      <p className="text-xs text-gray-400 mb-3">{event.location}</p>
-                      <div className="mb-2">
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-gray-600">Spots Available</span>
-                          <span className={`font-medium ${spotsPercentage < 30 ? 'text-red-600' : 'text-gray-900'}`}>
-                            {event.spotsLeft}/{event.totalSpots}
-                          </span>
+              {loadingEvents ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                </div>
+              ) : publicEvents.length > 0 ? (
+                <>
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    {publicEvents.map((event) => {
+                      const eventDate = event.start_datetime || event.date
+                      return (
+                        <div 
+                          key={event.id}
+                          className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer group"
+                        >
+                          {(event.image_url || event.featured_image_url) && (
+                            <img 
+                              src={event.image_url || event.featured_image_url} 
+                              alt={event.title}
+                              className="w-full h-32 object-cover rounded-lg mb-3"
+                            />
+                          )}
+                          <p className="text-sm font-medium text-gray-900 group-hover:text-green-600 transition-colors mb-2">
+                            {event.title}
+                          </p>
+                          <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                            {truncateText(stripHtml(event.description), 80)}
+                          </p>
+                          {eventDate && (
+                            <p className="text-xs text-gray-500 mb-2">
+                              📅 {formatDate(eventDate)} • {formatTime(eventDate)}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 mb-3">📍 {event.location}</p>
+                          <button className="w-full mt-2 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors">
+                            View Details
+                          </button>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div 
-                            className={`h-1.5 rounded-full transition-all ${
-                              spotsPercentage < 30 ? 'bg-red-500' : 
-                              spotsPercentage < 60 ? 'bg-yellow-500' : 'bg-green-500'
-                            }`}
-                            style={{ width: `${spotsPercentage}%` }}
-                          />
-                        </div>
-                      </div>
-                      <button className="w-full mt-2 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors">
-                        Register Now
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-              <button className="w-full mt-4 py-2.5 text-sm text-green-600 hover:text-green-700 font-medium hover:bg-green-50 rounded-lg transition-colors">
-                Browse All Events
-              </button>
+                      )
+                    })}
+                  </div>
+                  <button className="w-full mt-4 py-2.5 text-sm text-green-600 hover:text-green-700 font-medium hover:bg-green-50 rounded-lg transition-colors">
+                    Browse All Events
+                  </button>
+                </>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <CalendarIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                  <p>No events available</p>
+                </div>
+              )}
             </div>
 
             {/* Announcements */}
@@ -549,42 +464,52 @@ const Dashboard: FC = () => {
                 </h3>
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {announcements.map((announcement) => (
-                  <div 
-                    key={announcement.id}
-                    className="p-4 rounded-lg border transition-all cursor-pointer"
-                    style={{
-                      borderColor: announcement.priority === 'high' ? '#fee2e2' : '#fef3c7',
-                      backgroundColor: announcement.priority === 'high' ? '#fef2f2' : '#fffbeb'
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                            {announcement.category}
+              {loadingAnnouncements ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                </div>
+              ) : announcements.length > 0 ? (
+                <>
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    {announcements.map((announcement) => (
+                      <div 
+                        key={announcement.id}
+                        className="p-4 rounded-lg border border-red-100 bg-red-50 transition-all cursor-pointer hover:shadow-md"
+                      >
+                        {announcement.image_url && (
+                          <img 
+                            src={announcement.image_url} 
+                            alt={announcement.title}
+                            className="w-full h-24 object-cover rounded-lg mb-3"
+                          />
+                        )}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="text-sm font-medium text-gray-900 flex-1">
+                            {announcement.title}
+                          </p>
+                          <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full flex-shrink-0">
+                            New
                           </span>
-                          {announcement.priority === 'high' && (
-                            <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full flex items-center gap-1">
-                              <ExclamationCircleIcon className="w-3 h-3" />
-                              Important
-                            </span>
-                          )}
                         </div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {announcement.title}
+                        <p className="text-xs text-gray-600 mb-2 line-clamp-3">
+                          {truncateText(stripHtml(announcement.content), 100)}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {formatDate(announcement.announced_at)}
                         </p>
                       </div>
-                    </div>
-                    <p className="text-xs text-gray-600 mb-2">{announcement.message}</p>
-                    <p className="text-xs text-gray-400">{announcement.date}</p>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <button className="w-full mt-4 py-2.5 text-sm text-orange-600 hover:text-orange-700 font-medium hover:bg-orange-50 rounded-lg transition-colors">
-                View All Announcements
-              </button>
+                  <button className="w-full mt-4 py-2.5 text-sm text-orange-600 hover:text-orange-700 font-medium hover:bg-orange-50 rounded-lg transition-colors">
+                    View All Announcements
+                  </button>
+                </>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <BellAlertIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                  <p>No announcements</p>
+                </div>
+              )}
             </div>
 
             {/* Quick Actions */}
