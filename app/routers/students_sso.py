@@ -343,13 +343,13 @@ async def register_student_route(
                     "code": "WEAK_PASSWORD"
                 }
             )
-        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        email_regex = r'^[a-zA-Z0-9._%+-]+@jkuat\.ac\.ke$'
         if not re.match(email_regex, student_data.email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "success": False,
-                    "message": "Please enter a valid email address",
+                    "message": "Please enter a valid JKUAT email address (must end with @jkuat.ac.ke)",
                     "code": "INVALID_EMAIL"
                 }
             )
