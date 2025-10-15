@@ -15,7 +15,7 @@ import {
   UsersIcon,
   SparklesIcon
 } from '@heroicons/react/24/outline'
-import Layout from '../context/Layout'
+import Layout from '../components/Layout'
 
 interface Event {
   id: number
