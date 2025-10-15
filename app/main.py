@@ -31,7 +31,8 @@ from app.routers import (
     students_sso,
     ai_assistant,
     lost_id,
-    admin_subscriber
+    admin_subscriber,
+    admin_students
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
@@ -127,7 +128,7 @@ app.include_router(ai_assistant.router)
 app.include_router(lost_id.router)
 app.include_router(admin_subscriber.router)
 app.include_router(public_subscriber_router)
-
+app.include_router(admin_students.router)
 @app.get("/")
 def read_root():
     logger.debug("Root endpoint accessed")
