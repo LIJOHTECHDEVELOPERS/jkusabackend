@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 import bcrypt
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.user import User
 from app.models.admin import Admin
@@ -79,10 +79,12 @@ def get_user(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
 def get_admin(db: Session, username: str):
-    return db.query(Admin).filter(Admin.username == username).first()
+    """Get admin with role relationship loaded"""
+    return db.query(Admin).options(joinedload(Admin.role)).filter(Admin.username == username).first()
 
 def get_admin_by_identifier(db: Session, identifier: str):
-    return db.query(Admin).filter(
+    """Get admin by username or email with role relationship loaded"""
+    return db.query(Admin).options(joinedload(Admin.role)).filter(
         (Admin.username == identifier) | (Admin.email == identifier)
     ).first()
 
@@ -125,6 +127,10 @@ async def get_current_user(token: str = Depends(user_oauth2_scheme), db: Session
 
 
 async def get_current_admin(token: str = Depends(admin_oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    Get the current authenticated admin with role relationship loaded.
+    Returns the SQLAlchemy Admin model (not Pydantic schema) to preserve relationships.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate admin credentials",
@@ -137,20 +143,28 @@ async def get_current_admin(token: str = Depends(admin_oauth2_scheme), db: Sessi
         user_type: str = payload.get("type")
         if username is None or user_type != "admin":
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logger.error(f"JWT decode error: {e}")
         raise credentials_exception
 
-    admin = get_admin(db, username=username)
+    # Load admin with role relationship eagerly loaded
+    admin = db.query(Admin).options(joinedload(Admin.role)).filter(Admin.username == username).first()
+    
     if admin is None:
+        logger.warning(f"Admin not found for username: {username}")
         raise credentials_exception
 
-    # ✅ Return all required fields for AdminSchema
-    return AdminSchema(
-        id=admin.id,
-        username=admin.username,
-        first_name=admin.first_name if hasattr(admin, "first_name") else None,
-        last_name=admin.last_name if hasattr(admin, "last_name") else None,
-        email=admin.email if hasattr(admin, "email") else None,
-        phone_number=admin.phone_number if hasattr(admin, "phone_number") else None,
-        is_active=admin.is_active if hasattr(admin, "is_active") else True
-    )
+    if not admin.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin account is inactive"
+        )
+
+    # Log role information for debugging
+    if admin.role:
+        logger.debug(f"Admin {admin.username} loaded with role: {admin.role.name}, permissions: {admin.role.permissions}")
+    else:
+        logger.warning(f"Admin {admin.username} has no role assigned (role_id: {admin.role_id})")
+
+    # Return the SQLAlchemy model directly to preserve the role relationship
+    return admin
