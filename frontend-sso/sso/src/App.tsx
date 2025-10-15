@@ -1,7 +1,7 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
+import ProtectedRoute from './pages/ProtectedRoute'
 import SignIn from './components/SignIn'
 import SignUp from './components/SignUp'
 import ForgotPassword from './components/ForgotPassword'
