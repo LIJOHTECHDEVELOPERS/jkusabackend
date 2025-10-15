@@ -499,10 +499,8 @@ async def verify_email_route(token: str, db: Session = Depends(get_db)):
             student.verification_token == token
         ).first()
 
-        # If no student found with this token, check if account exists and is already verified
+        # If no student found with this token
         if not db_student:
-            # Try to find if this was a previously used token (check recent verifications)
-            # This is a security measure - don't reveal if email exists
             logger.info(f"Verification link already used or invalid: {token[:10]}...")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -674,16 +672,22 @@ async def login_student_route(
                 )
         if not db_student.is_active:
             logger.info(f"Login attempt on unverified account: {db_student.email}")
-            needs_new_token = is_token_expired(db_student.verification_token_expiry) or not db_student.verification_token
-            if needs_new_token:
+            
+            # FIXED: Check if token exists and is still valid - reuse it if possible
+            if db_student.verification_token and not is_token_expired(db_student.verification_token_expiry):
+                # Token is still valid - just resend the email with the same token
+                verification_token = db_student.verification_token
+                logger.info(f"Resending existing valid verification token for: {db_student.email}")
+            else:
+                # Token expired or doesn't exist - generate a new one
                 verification_token = str(uuid.uuid4())
                 token_expiry = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
                 db_student.verification_token = verification_token
                 db_student.verification_token_expiry = token_expiry
                 db.commit()
                 logger.info(f"Generated new verification token for: {db_student.email}")
-            else:
-                verification_token = db_student.verification_token
+            
+            # Send verification email with the token (either existing or new)
             email_sent = False
             try:
                 user_name = f"{db_student.first_name} {db_student.last_name}"
@@ -695,6 +699,7 @@ async def login_student_route(
                 logger.info(f"Verification email {'sent' if email_sent else 'failed'} to: {db_student.email}")
             except Exception as e:
                 logger.error(f"Failed to send verification email: {str(e)}")
+            
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
@@ -1248,11 +1253,21 @@ async def resend_verification_route(
                 "message": "This account is already verified. You can sign in now.",
                 "code": "ALREADY_VERIFIED"
             }
-        verification_token = str(uuid.uuid4())
-        token_expiry = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
-        db_student.verification_token = verification_token
-        db_student.verification_token_expiry = token_expiry
-        db.commit()
+        
+        # FIXED: Check if token exists and is still valid - reuse it if possible
+        if db_student.verification_token and not is_token_expired(db_student.verification_token_expiry):
+            # Token is still valid - just resend the email with the same token
+            verification_token = db_student.verification_token
+            logger.info(f"Resending existing valid verification token for: {email}")
+        else:
+            # Token expired or doesn't exist - generate a new one
+            verification_token = str(uuid.uuid4())
+            token_expiry = datetime.utcnow() + timedelta(hours=VERIFICATION_TOKEN_EXPIRE_HOURS)
+            db_student.verification_token = verification_token
+            db_student.verification_token_expiry = token_expiry
+            db.commit()
+            logger.info(f"Generated new verification token for: {email}")
+        
         email_sent = False
         try:
             user_name = f"{db_student.first_name} {db_student.last_name}"
