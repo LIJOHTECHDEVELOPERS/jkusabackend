@@ -1,4 +1,5 @@
-import { FC } from 'react'
+import { FC, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { 
   AcademicCapIcon, 
@@ -18,6 +19,14 @@ import Layout from '../components/Layout'
 
 const Dashboard: FC = () => {
   const { user } = useAuth()
+  const navigate = useNavigate()
+
+  // Redirect to signin if user is not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate('/signin')
+    }
+  }, [user, navigate])
 
   // Mock data for dashboard
   const upcomingEvents = [
