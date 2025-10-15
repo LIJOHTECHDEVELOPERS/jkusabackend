@@ -6,16 +6,14 @@ import {
   BuildingOffice2Icon,
   BookOpenIcon,
   CalendarIcon,
-  CurrencyDollarIcon,
   UserGroupIcon,
   CheckCircleIcon,
-  TicketIcon,
   SpeakerWaveIcon,
   BellAlertIcon,
   UsersIcon,
   SparklesIcon
 } from '@heroicons/react/24/outline'
-import Layout from '../components/Layout'
+import Layout from '../context/Layout'
 
 interface Event {
   id: number
@@ -47,7 +45,7 @@ interface Activity {
   image_url?: string
 }
 
-const Dashboard: FC = () => {
+const Dashboard: FC = () {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [publicEvents, setPublicEvents] = useState<Event[]>([])
@@ -220,7 +218,6 @@ const Dashboard: FC = () => {
             Stay connected with JKUSA events, announcements, and your student community.
           </p>
         </div>
-
         {/* Quick Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {quickStats.map((stat, index) => {
@@ -251,7 +248,6 @@ const Dashboard: FC = () => {
             )
           })}
         </div>
-
         {/* Main Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - 2/3 width */}
@@ -290,7 +286,6 @@ const Dashboard: FC = () => {
                 </div>
               </div>
             </div>
-
             {/* Academic Info Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition-all duration-300 hover:border-blue-200">
@@ -333,7 +328,6 @@ const Dashboard: FC = () => {
                 </div>
               </div>
             </div>
-
             {/* Events Registered - Coming Soon */}
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-sm border-2 border-dashed border-purple-300 p-6">
               <div className="flex flex-col items-center justify-center text-center py-8">
@@ -359,13 +353,12 @@ const Dashboard: FC = () => {
                 </div>
               </div>
             </div>
-
             {/* Recent Activity */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold text-gray-900">Recent Activities</h3>
-                <button 
-                  onClick={() => window.location.href = 'https://jkusa.org/calender'}
+                <button
+                  onClick={() => navigate('/calender')}
                   className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                 >
                   View All
@@ -406,7 +399,6 @@ const Dashboard: FC = () => {
               )}
             </div>
           </div>
-
           {/* Right Column - 1/3 width */}
           <div className="space-y-6">
             {/* Available Events */}
@@ -451,8 +443,8 @@ const Dashboard: FC = () => {
                             </p>
                           )}
                           <p className="text-xs text-gray-400 mb-3">📍 {event.location}</p>
-                          <button 
-                            onClick={() => window.location.href = `https://jkusa.org/events/${event.slug}`}
+                          <button
+                            onClick={() => navigate(`/events/${event.slug}`)}
                             className="w-full mt-2 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors"
                           >
                             View Details
@@ -461,8 +453,8 @@ const Dashboard: FC = () => {
                       )
                     })}
                   </div>
-                  <button 
-                    onClick={() => window.location.href = 'https://jkusa.org/events'}
+                  <button
+                    onClick={() => navigate('/events')}
                     className="w-full mt-4 py-2.5 text-sm text-green-600 hover:text-green-700 font-medium hover:bg-green-50 rounded-lg transition-colors"
                   >
                     Browse All Events
@@ -475,7 +467,6 @@ const Dashboard: FC = () => {
                 </div>
               )}
             </div>
-
             {/* Announcements */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-5">
@@ -527,13 +518,12 @@ const Dashboard: FC = () => {
                 </div>
               )}
             </div>
-
             {/* Quick Actions */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-2">
-                <button 
-                  onClick={() => window.location.href = 'https://jkusa.org/events'}
+                <button
+                  onClick={() => navigate('/events')}
                   className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   <CalendarIcon className="w-4 h-4" />
