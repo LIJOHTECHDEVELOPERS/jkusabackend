@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import axios from 'axios'
 
 const API_BASE_URL = 'https://backend.jkusa.org/students/auth'
@@ -56,6 +57,11 @@ export const useAuth = (): AuthContextType => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<Student | null>(null)
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // Public routes that don't require authentication
+  const publicRoutes = ['/signin', '/signup', '/forgot-password', '/reset-password', '/verify-email', '/']
 
   useEffect(() => {
     checkAuth()
@@ -69,6 +75,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Auth check failed:', error)
+      setUser(null)
+      
+      // Redirect to signin if not on a public route
+      if (!publicRoutes.includes(location.pathname)) {
+        navigate('/signin', { replace: true })
+      }
     } finally {
       setLoading(false)
     }
@@ -86,8 +98,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async (): Promise<void> => {
     try {
       await axios.post(`${API_BASE_URL}/logout`, {}, { withCredentials: true })
+    } catch (error) {
+      console.error('Logout error:', error)
     } finally {
       setUser(null)
+      navigate('/signin', { replace: true })
     }
   }
 
