@@ -160,6 +160,10 @@ const SignUp: FC = () => {
         setError('Please enter a valid email address')
         return false
       }
+      if (!/^[^\s@]+@jkuat\.ac\.ke$/.test(formData.email)) {
+        setError('Email must be a valid JKUAT email address (ending with @jkuat.ac.ke)')
+        return false
+      }
       if (phoneInput.length < 9) {
         setError('Please enter a valid phone number (at least 9 digits)')
         return false
@@ -283,7 +287,7 @@ const SignUp: FC = () => {
             setStep(3)
             break
           case 'INVALID_EMAIL':
-            setError(message || 'Please enter a valid email address.')
+            setError(message || 'Please enter a valid JKUAT email address (ending with @jkuat.ac.ke).')
             setStep(1)
             break
           case 'INVALID_PHONE':
@@ -492,7 +496,7 @@ const SignUp: FC = () => {
         title: "Personal Information",
         description: "Let's start with your basic details. This information will be used to create your student profile.",
         icon: UserIcon,
-        items: ["Full legal name", "Valid email address", "Contact phone number"]
+        items: ["Full legal name", "Valid JKUAT email address", "Contact phone number"]
       },
       2: {
         title: "Academic Details",
@@ -594,7 +598,7 @@ const SignUp: FC = () => {
                   label="Email Address"
                   type="email"
                   icon={EnvelopeIcon}
-                  placeholder="your.email@example.com"
+                  placeholder="your.email@jkuat.ac.ke"
                   value={formData.email}
                   onChange={(e) => {
                     setFormData({ ...formData, email: e.target.value })
