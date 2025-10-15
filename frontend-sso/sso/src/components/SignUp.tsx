@@ -160,7 +160,7 @@ const SignUp: FC = () => {
         setError('Please enter a valid email address')
         return false
       }
-      if (!/^[^\s@]+@jkuat\.ac\.ke$/.test(formData.email)) {
+      if (!/^[^\s@]+@students.jkuat\.ac\.ke$/.test(formData.email)) {
         setError('Email must be a valid JKUAT email address (ending with @jkuat.ac.ke)')
         return false
       }

@@ -343,7 +343,7 @@ async def register_student_route(
                     "code": "WEAK_PASSWORD"
                 }
             )
-        email_regex = r'^[a-zA-Z0-9._%+-]+@jkuat\.ac\.ke$'
+        email_regex = r'^[a-zA-Z0-9._%+-]+@students.jkuat\.ac\.ke$'
         if not re.match(email_regex, student_data.email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
