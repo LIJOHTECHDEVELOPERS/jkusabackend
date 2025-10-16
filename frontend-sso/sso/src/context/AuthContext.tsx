@@ -187,8 +187,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await axiosInstance.get(`${API_BASE_URL}/me`)
 
       if (response.status === 200 && response.data) {
-        console.log('✅ User authenticated:', response.data.first_name)
-        setUser(response.data)
+        // Handle both wrapped and direct responses
+        const userData = response.data.data || response.data
+        console.log('✅ User authenticated:', userData.first_name)
+        setUser(userData)
       }
     } catch (error: any) {
       console.error('❌ Auth check failed:', error.response?.status, error.message)

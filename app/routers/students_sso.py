@@ -875,12 +875,23 @@ async def logout_student_route(
 async def get_current_student_details_route(
     current_student: student = Depends(get_current_student)
 ):
-    return {
-        "success": True,
-        "message": "User details retrieved successfully",
-        "code": "USER_DETAILS_RETRIEVED",
-        "data": studentResponse.from_orm(current_student)
-    }
+    """
+    Get current authenticated student details.
+    Returns the student object directly (not wrapped).
+    """
+    try:
+        logger.info(f"Fetching details for student: {current_student.email}")
+        return studentResponse.from_orm(current_student)
+    except Exception as e:
+        logger.error(f"Error retrieving student details: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": "An error occurred while retrieving your details",
+                "code": "SERVER_ERROR"
+            }
+        )
 
 @router.post("/password-reset-request")
 async def request_password_reset_route(
