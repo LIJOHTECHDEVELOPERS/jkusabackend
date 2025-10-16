@@ -4,6 +4,11 @@ import axios, { AxiosInstance } from 'axios'
 
 const API_BASE_URL = 'https://backend.jkusa.org/students/auth'
 
+interface College {
+  id: number
+  name: string
+}
+
 interface Student {
   id: number
   first_name: string
@@ -19,6 +24,7 @@ interface Student {
   created_at: string
   last_login?: string
   email_verified_at?: string
+  college?: College
 }
 
 interface RegistrationData {
