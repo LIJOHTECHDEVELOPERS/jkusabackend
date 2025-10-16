@@ -9,6 +9,11 @@ interface College {
   name: string
 }
 
+interface School {
+  id: number
+  name: string
+}
+
 interface Student {
   id: number
   first_name: string
@@ -25,6 +30,7 @@ interface Student {
   last_login?: string
   email_verified_at?: string
   college?: College
+  school?: School
 }
 
 interface RegistrationData {

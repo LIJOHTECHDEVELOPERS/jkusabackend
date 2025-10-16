@@ -11,7 +11,8 @@ import {
   SpeakerWaveIcon,
   BellAlertIcon,
   UsersIcon,
-  SparklesIcon
+  SparklesIcon,
+  BuildingLibraryIcon
 } from '@heroicons/react/24/outline'
 import Layout from '../components/Layout'
 
@@ -52,6 +53,7 @@ const Dashboard: FC = () => {
   const [activities, setActivities] = useState<Activity[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [collegeName, setCollegeName] = useState('')
+  const [schoolName, setSchoolName] = useState('')
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [loadingActivities, setLoadingActivities] = useState(true)
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true)
@@ -75,10 +77,13 @@ const Dashboard: FC = () => {
     )
   }
 
-  // Set college name from user object
+  // Set college and school name from user object
   useEffect(() => {
     if (user?.college?.name) {
       setCollegeName(user.college.name)
+    }
+    if (user?.school?.name) {
+      setSchoolName(user.school.name)
     }
   }, [user])
 
@@ -290,14 +295,27 @@ const Dashboard: FC = () => {
               </div>
             </div>
             {/* Academic Info Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition-all duration-300 hover:border-indigo-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <BuildingLibraryIcon className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-500 mb-1">School</p>
+                    <p className="font-semibold text-gray-900 text-sm truncate">
+                      {schoolName || 'Loading...'}
+                    </p>
+                  </div>
+                </div>
+              </div>
               <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition-all duration-300 hover:border-blue-200">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                     <BuildingOffice2Icon className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-500 mb-1">College Name</p>
+                    <p className="text-xs text-gray-500 mb-1">College</p>
                     <p className="font-semibold text-gray-900 text-sm truncate">
                       {collegeName || 'Loading...'}
                     </p>
@@ -343,7 +361,7 @@ const Dashboard: FC = () => {
                 <p className="text-gray-600 max-w-md">
                   We're working on an amazing event registration system. Soon you'll be able to register for events, track your bookings, and get instant confirmations!
                 </p>
-                <div className="mt-6 flex gap-2">
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
                   <span className="px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
                     🎯 Track Registrations
                   </span>
