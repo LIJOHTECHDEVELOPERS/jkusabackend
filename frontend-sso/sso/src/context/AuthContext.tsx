@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Auth check failed:', error)
       setUser(null)
       
-      // Redirect to signin if not on a public route
+      // Redirect to signin if not on a public route AND loading is complete
       if (!publicRoutes.includes(location.pathname)) {
         navigate('/signin', { replace: true })
       }
@@ -92,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(response.data.detail || 'Login failed')
     }
     setUser(response.data.student)
+    setLoading(false)
     return response.data
   }
 
@@ -102,6 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Logout error:', error)
     } finally {
       setUser(null)
+      setLoading(false)
       navigate('/signin', { replace: true })
     }
   }

@@ -46,7 +46,7 @@ interface Activity {
 }
 
 const Dashboard: FC = () => {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const navigate = useNavigate()
   const [publicEvents, setPublicEvents] = useState<Event[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
@@ -56,12 +56,24 @@ const Dashboard: FC = () => {
   const [loadingActivities, setLoadingActivities] = useState(true)
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true)
 
-  // Redirect to signin if user is not authenticated
+  // Redirect to signin if user is not authenticated (only after loading completes)
   useEffect(() => {
-    if (!user) {
+    if (!loading && !user) {
       navigate('/signin')
     }
-  }, [user, navigate])
+  }, [user, loading, navigate])
+
+  // Show loading screen while checking authentication
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   // Fetch college name
   useEffect(() => {
