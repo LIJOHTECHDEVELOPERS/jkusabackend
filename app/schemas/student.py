@@ -9,6 +9,23 @@ from datetime import datetime
 import re
 
 
+class CollegeResponse(BaseModel):
+    """Schema for college response"""
+    id: int
+    name: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SchoolResponse(BaseModel):
+    """Schema for school response"""
+    id: int
+    name: str
+    college_id: int
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class studentCreate(BaseModel):
     """Schema for student registration"""
     first_name: str = Field(..., min_length=2, max_length=50)
@@ -81,7 +98,7 @@ class studentLogin(BaseModel):
 
 
 class studentResponse(BaseModel):
-    """Schema for student response (excludes sensitive data)"""
+    """Schema for student response with college and school details"""
     id: int
     first_name: str
     last_name: str
@@ -96,6 +113,10 @@ class studentResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime] = None
     email_verified_at: Optional[datetime] = None
+    
+    # Include college and school relationship data
+    college: Optional[CollegeResponse] = None
+    school: Optional[SchoolResponse] = None
     
     model_config = ConfigDict(
         from_attributes=True,
@@ -114,7 +135,16 @@ class studentResponse(BaseModel):
                 "is_active": True,
                 "created_at": "2024-01-15T10:30:00",
                 "last_login": "2024-01-20T14:45:00",
-                "email_verified_at": "2024-01-15T11:00:00"
+                "email_verified_at": "2024-01-15T11:00:00",
+                "college": {
+                    "id": 1,
+                    "name": "COPAS"
+                },
+                "school": {
+                    "id": 1,
+                    "name": "School of Computing and Information Technology",
+                    "college_id": 1
+                }
             }
         }
     )
@@ -171,20 +201,3 @@ class PasswordChange(BaseModel):
             }
         }
     )
-
-
-class CollegeResponse(BaseModel):
-    """Schema for college response"""
-    id: int
-    name: str
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
-class SchoolResponse(BaseModel):
-    """Schema for school response"""
-    id: int
-    name: str
-    college_id: int
-    
-    model_config = ConfigDict(from_attributes=True)

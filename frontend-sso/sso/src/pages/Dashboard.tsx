@@ -75,20 +75,11 @@ const Dashboard: FC = () => {
     )
   }
 
-  // Fetch college name
+  // Set college name from user object
   useEffect(() => {
-    const fetchCollegeName = async () => {
-      if (user?.college_id) {
-        try {
-          const response = await fetch(`https://backend.jkusa.org/colleges/${user.college_id}/`)
-          const data = await response.json()
-          setCollegeName(data.name || '')
-        } catch (error) {
-          console.error('Error fetching college name:', error)
-        }
-      }
+    if (user?.college?.name) {
+      setCollegeName(user.college.name)
     }
-    fetchCollegeName()
   }, [user])
 
   // Fetch public events

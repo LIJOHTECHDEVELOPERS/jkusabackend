@@ -873,15 +873,22 @@ async def logout_student_route(
 
 @router.get("/me", response_model=studentResponse)
 async def get_current_student_details_route(
-    current_student: student = Depends(get_current_student)
+    current_student: student = Depends(get_current_student),
+    db: Session = Depends(get_db)
 ):
     """
-    Get current authenticated student details.
-    Returns the student object directly (not wrapped).
+    Get current authenticated student details with college and school information.
+    Returns the student object with relationships eagerly loaded.
     """
     try:
+        # Refresh the student object to ensure relationships are loaded
+        db.refresh(current_student)
+        
         logger.info(f"Fetching details for student: {current_student.email}")
-        return studentResponse.from_orm(current_student)
+        
+        # Create response with relationships included
+        response_data = studentResponse.from_orm(current_student)
+        return response_data
     except Exception as e:
         logger.error(f"Error retrieving student details: {str(e)}")
         raise HTTPException(
