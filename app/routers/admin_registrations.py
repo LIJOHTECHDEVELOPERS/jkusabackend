@@ -1,6 +1,3 @@
-# ==================== ADMIN APIS ====================
-# app/routes/admin_registrations.py
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -17,7 +14,7 @@ from app.models.registration import (
 from app.models.student import School, College
 from app.schemas.registration import (
     FormCreate, FormUpdate, FormResponse, FormField as FormFieldSchema,
-    FormSubmissionResponse, FormAnalyticsResponse, FieldAnalytics  # These imports will now work
+    FormSubmissionResponse, FormAnalyticsResponse, FieldAnalytics
 )
 from app.auth.auth import get_current_admin
 from app.services.gemini_service import generate_form_analytics
@@ -46,16 +43,23 @@ async def create_form(
                     detail="One or more schools not found"
                 )
         
-        # Create form
+        # Create form with explicit status handling
+        form_dict = form_data.dict(exclude_unset=True)
+        # Ensure status is a valid FormStatus enum value
+        if 'status' in form_dict:
+            form_dict['status'] = FormStatus(form_dict['status']).value
+        else:
+            form_dict['status'] = FormStatus.DRAFT.value  # Default to lowercase 'draft'
+        
         db_form = Form(
-            title=form_data.title,
-            description=form_data.description,
+            title=form_dict['title'],
+            description=form_dict.get('description'),
             created_by=current_admin.id,
-            open_date=form_data.open_date,
-            close_date=form_data.close_date,
-            status=FormStatus.DRAFT,
-            target_all_students=form_data.target_all_students,
-            target_years=form_data.target_years or []
+            open_date=form_dict['open_date'],
+            close_date=form_dict['close_date'],
+            status=form_dict['status'],
+            target_all_students=form_dict.get('target_all_students', False),
+            target_years=form_dict.get('target_years', [])
         )
         db.add(db_form)
         db.flush()
@@ -102,7 +106,7 @@ async def create_form(
         logger.error(f"Error creating form: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error creating form"
+            detail=f"Error creating form: {str(e)}"
         )
 
 @router.get("/forms", response_model=List[FormResponse])
@@ -161,6 +165,10 @@ async def update_form(
     try:
         update_data = form_data.dict(exclude_unset=True)
         
+        # Ensure status is a valid FormStatus enum value
+        if 'status' in update_data:
+            update_data['status'] = FormStatus(update_data['status']).value
+        
         # Handle target school updates
         if 'target_school_ids' in update_data:
             school_ids = update_data.pop('target_school_ids')
@@ -184,7 +192,7 @@ async def update_form(
         logger.error(f"Error updating form: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error updating form"
+            detail=f"Error updating form: {str(e)}"
         )
 
 @router.delete("/forms/{form_id}")
@@ -215,7 +223,7 @@ async def delete_form(
         logger.error(f"Error deleting form: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error deleting form"
+            detail=f"Error deleting form: {str(e)}"
         )
 
 @router.post("/forms/{form_id}/publish")
@@ -234,7 +242,7 @@ async def publish_form(
             detail="Form not found"
         )
     
-    db_form.status = FormStatus.OPEN
+    db_form.status = FormStatus.OPEN.value
     db.commit()
     db.refresh(db_form)
     
@@ -257,7 +265,7 @@ async def close_form(
             detail="Form not found"
         )
     
-    db_form.status = FormStatus.CLOSED
+    db_form.status = FormStatus.CLOSED.value
     
     # Lock all submissions
     submissions = db.query(FormSubmission).filter(FormSubmission.form_id == form_id).all()
@@ -310,7 +318,7 @@ async def add_field(
         logger.error(f"Error adding field: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error adding field"
+            detail=f"Error adding field: {str(e)}"
         )
 
 @router.delete("/forms/{form_id}/fields/{field_id}")
@@ -344,7 +352,7 @@ async def delete_field(
         logger.error(f"Error deleting field: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error deleting field"
+            detail=f"Error deleting field: {str(e)}"
         )
 
 # ========== SUBMISSIONS MANAGEMENT ==========
@@ -424,7 +432,7 @@ async def delete_submission(
         logger.error(f"Error deleting submission: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error deleting submission"
+            detail=f"Error deleting submission: {str(e)}"
         )
 
 # ========== ANALYTICS & EXPORT ==========
@@ -450,13 +458,10 @@ async def get_form_analytics(
     # Calculate field analytics
     field_analytics = []
     for field in db_form.fields:
-        # Note: In the database, submission data is often stored as a dictionary 
-        # where keys are field IDs (often strings).
         responses = [sub.data.get(str(field.id)) for sub in submissions if str(field.id) in sub.data]
         
         response_breakdown = {}
         if field.field_type == "boolean":
-            # Note: Assuming boolean values are stored as True/False (Python booleans)
             response_breakdown = {
                 "true": sum(1 for r in responses if r is True),
                 "false": sum(1 for r in responses if r is False)
@@ -466,10 +471,8 @@ async def get_form_analytics(
             for response in responses:
                 response_breakdown[response] = response_breakdown.get(response, 0) + 1
         else:
-            # For text, number, etc., just show the count
             response_breakdown = {"total_responses": len(responses)}
         
-        # This will now successfully create the FieldAnalytics Pydantic object
         field_analytics.append(FieldAnalytics(
             field_id=field.id,
             field_label=field.label,
@@ -482,8 +485,6 @@ async def get_form_analytics(
     ai_summary = None
     ai_insights = None
     if total_submissions > 0:
-        # Assuming generate_form_analytics is correctly defined in app.services.gemini_service
-        # and returns a tuple (ai_summary: str, ai_insights: str)
         ai_summary, ai_insights = generate_form_analytics(
             form_title=db_form.title,
             fields=db_form.fields,
@@ -491,7 +492,6 @@ async def get_form_analytics(
             field_analytics=field_analytics
         )
     
-    # This will now successfully create the FormAnalyticsResponse Pydantic object
     return FormAnalyticsResponse(
         form_id=form_id,
         form_title=db_form.title,
@@ -525,5 +525,4 @@ async def export_submissions(
     ).all()
     
     # Implementation depends on export service
-    # This is a placeholder
     return {"message": f"Export in {format} format", "count": len(submissions)}
