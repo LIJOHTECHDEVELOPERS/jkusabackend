@@ -15,6 +15,7 @@ from app.models.club import Club
 from app.models.student import student
 from app.models.lost_id import LostID, IDType, IDStatus, Station
 from app.models.subscriber import Subscriber
+from app.models.registration import Form, FormField, FormCondition, FormSubmission
 
 from app.routers import (
     user_auth, 
@@ -32,7 +33,9 @@ from app.routers import (
     ai_assistant,
     lost_id,
     admin_subscriber,
-    admin_students
+    admin_students,
+    admin_registrations,
+    student_registrations
 )
 from app.routers.admin_announcement import public_router as public_announcement_router
 from app.routers.admin_news import public_news_router
@@ -50,7 +53,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="JKUSA CMS Backend with AI Assistant")
+app = FastAPI(title="JKUSA CMS Backend with AI Assistant & Registration System")
 
 # Enable CORS
 origins = [
@@ -61,6 +64,9 @@ origins = [
     "https://dashboard.jkusa.org",
     "https://jkusa.org",
     "https://portal.jkusa.org",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:5173",
 ]
 
 app.add_middleware(
@@ -103,10 +109,12 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Create database tables - ALL models must be imported above for this to work
 Base.metadata.create_all(bind=engine)
 
-# Include routers
+# Include routers - Authentication & Core
 app.include_router(user_auth.router)
 app.include_router(admin_auth.router)
 app.include_router(admin_roles.router)
+
+# Include routers - Content Management (Admin & Public)
 app.include_router(admin_announcement.router)
 app.include_router(public_announcement_router)
 app.include_router(admin_leadership.router)
@@ -123,21 +131,44 @@ app.include_router(admin_activity.router)
 app.include_router(public_activity_router)
 app.include_router(admin_club.router)
 app.include_router(public_club_router)
+
+# Include routers - Subscribers & Students
 app.include_router(students_sso.router)
-app.include_router(ai_assistant.router) 
-app.include_router(lost_id.router)
 app.include_router(admin_subscriber.router)
 app.include_router(public_subscriber_router)
 app.include_router(admin_students.router)
+
+# Include routers - Registration System (NEW)
+app.include_router(admin_registrations.router)
+app.include_router(student_registrations.router)
+
+# Include routers - Utilities
+app.include_router(ai_assistant.router) 
+app.include_router(lost_id.router)
+
 @app.get("/")
 def read_root():
     logger.debug("Root endpoint accessed")
     return {
-        "message": "JKUSA CMS Backend with AI Assistant is running.",
+        "message": "JKUSA CMS Backend with AI Assistant & Registration System is running.",
+        "version": "2.0",
         "features": [
             "Content Management System",
             "Event Management",
             "Club Management",
-            "AI-Powered Assistant for JKUAT/JKUSA Information"
-        ]
+            "AI-Powered Assistant for JKUAT/JKUSA Information",
+            "Dynamic Registration System with Conditional Fields",
+            "AI-Powered Form Analytics using Gemini"
+        ],
+        "documentation": "/docs",
+        "openapi_schema": "/openapi.json"
+    }
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for load balancers and monitoring"""
+    return {
+        "status": "healthy",
+        "service": "JKUSA CMS Backend",
+        "timestamp": datetime.utcnow().isoformat()
     }

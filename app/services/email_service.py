@@ -14,7 +14,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@jkusa.org")
-EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "JKUSA Accounts")
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "JKUSA Association")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://portal.jkusa.org")
 
 # Validate email configuration
@@ -486,7 +486,7 @@ The JKUSA Team
             </p>
         </div>
         
-        {cls._get_button("Read Full Article", FRONTEND_URL + "/news", "primary")}
+        {cls._get_button("Read Full Article", "https://jkusa.org" + "/news", "primary")}
         
         <div style="background-color: {COLORS['primary_light']}; padding: 16px; border-radius: 8px; margin: 24px 0; text-align: center;">
             <p style="margin: 0; color: {COLORS['primary_deep']}; font-size: 14px; font-weight: 500;">
@@ -509,7 +509,7 @@ Latest News Update - JKUSA
 
 Published by: {publisher_name}
 
-Read the full article at: {FRONTEND_URL}/news
+Read the full article at: https://jkusa.org/news
 
 Stay informed with the latest campus news and updates from JKUSA.
 
@@ -596,7 +596,7 @@ The JKUSA Team
             </p>
         </div>
         
-        {cls._get_button("View All Events", FRONTEND_URL + "/events", "primary")}
+        {cls._get_button("View All Events", "https://jkusa.org" + "/events", "primary")}
         
         <div style="background-color: {COLORS['primary_light']}; padding: 16px; border-radius: 8px; margin: 24px 0; text-align: center;">
             <p style="margin: 0; color: {COLORS['primary_deep']}; font-size: 14px; font-weight: 500;">
@@ -623,7 +623,7 @@ Event Details:
 
 Organized by: {admin_name}
 
-View all events at: {FRONTEND_URL}/events
+View all events at: https://jkusa.org/events
 
 Don't miss out on this exciting event! Mark your calendar and join us.
 
