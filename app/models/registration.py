@@ -5,18 +5,18 @@ from enum import Enum
 from app.database import Base
 
 class FormStatus(str, Enum):
-    DRAFT = "draft"
-    OPEN = "open"
-    CLOSED = "closed"
+    draft = "draft"
+    open = "open"
+    closed = "closed"
 
 class FieldType(str, Enum):
-    TEXT = "text"
-    BOOLEAN = "boolean"
-    NUMBER = "number"
-    SELECT = "select"
-    DATE = "date"
-    TEXTAREA = "textarea"
-    EMAIL = "email"
+    text = "text"
+    boolean = "boolean"
+    number = "number"
+    select = "select"
+    date = "date"
+    textarea = "textarea"
+    email = "email"
 
 # Association table for form assignment to schools
 form_school_assignment = Table(
@@ -43,7 +43,7 @@ class Form(Base):
     created_by = Column(Integer, ForeignKey('admins.id'), nullable=False)
     open_date = Column(DateTime, nullable=False)
     close_date = Column(DateTime, nullable=False)
-    status = Column(SQLEnum(FormStatus), default=FormStatus.DRAFT.value, index=True)
+    status = Column(SQLEnum(FormStatus), default=FormStatus.draft, index=True)
     target_all_students = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

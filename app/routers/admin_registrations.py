@@ -44,7 +44,7 @@ async def create_form(
                 )
         
         # Log the validated status to debug
-        status_value = form_data.status.value if form_data.status else FormStatus.DRAFT.value
+        status_value = form_data.status.value if form_data.status else FormStatus.draft.value
         logger.debug(f"Validated status: {status_value}")
         
         # Create form using validated FormCreate data
