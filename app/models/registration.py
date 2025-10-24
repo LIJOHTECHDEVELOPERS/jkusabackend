@@ -43,7 +43,7 @@ class Form(Base):
     created_by = Column(Integer, ForeignKey('admins.id'), nullable=False)
     open_date = Column(DateTime, nullable=False)
     close_date = Column(DateTime, nullable=False)
-    status = Column(SQLEnum(FormStatus), default=FormStatus.DRAFT, index=True)
+    status = Column(SQLEnum(FormStatus), default=FormStatus.DRAFT.value, index=True)
     target_all_students = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
