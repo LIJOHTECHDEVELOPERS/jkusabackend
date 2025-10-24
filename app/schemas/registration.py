@@ -20,7 +20,7 @@ class FormStatus(str, Enum):
     OPEN = "open"
     CLOSED = "closed"
 
-# ========== Field Schemas ==========
+# -------------------- Field Schemas --------------------
 class FormConditionCreate(BaseModel):
     depends_on_field_id: int
     operator: str  # "equals", "not_equals", "contains"
@@ -66,7 +66,7 @@ class FormField(FormFieldCreate):
     class Config:
         from_attributes = True
 
-# ========== Form Schemas ==========
+# -------------------- Form Schemas --------------------
 class FormCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -106,6 +106,30 @@ class FormResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     fields: List[FormField]
+    
+    class Config:
+        from_attributes = True
+
+# -------------------- Submission Schemas (FIX for ImportError) --------------------
+class FormSubmissionFieldData(BaseModel):
+    """Represents a single field's data within a submission."""
+    field_id: int
+    value: Any # Value can be a string, number, boolean, or list, depending on FieldType
+
+class FormSubmissionCreate(BaseModel):
+    """Represents the data sent by a user to create a new submission."""
+    data: Dict[int, Any] # Dictionary mapping field_id (int) to the submitted value (Any)
+
+class FormSubmissionResponse(BaseModel):
+    """
+    Represents a full form submission retrieved from the database.
+    This is the class that was missing and causing the ImportError.
+    """
+    id: int
+    form_id: int
+    submitted_by: int # ID of the user who submitted the form
+    submitted_at: datetime
+    data: List[FormSubmissionFieldData] # The actual data submitted
     
     class Config:
         from_attributes = True
