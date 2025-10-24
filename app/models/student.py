@@ -44,16 +44,6 @@ class School(Base):
     def __repr__(self):
         return f"<School(id={self.id}, name='{self.name}', college_id={self.college_id})>"
 
-class FormSubmission(Base):
-    """FormSubmission model"""
-    __tablename__ = "form_submissions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
-    # Add other fields as needed for form submissions
-
-    # Relationships
-    student = relationship("student", back_populates="form_submissions")
 
 class student(Base):
     """Student model with comprehensive authentication fields"""
