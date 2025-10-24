@@ -15,7 +15,7 @@ from app.schemas.registration import (
     FormResponse, FormSubmissionCreate, FormSubmissionUpdate, 
     FormSubmissionResponse, FormFieldSchema
 )
-from app.auth.auth import get_current_student
+from app.routers.students_sso import get_current_student
 
 logger = logging.getLogger(__name__)
 
