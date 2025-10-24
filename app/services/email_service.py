@@ -443,6 +443,196 @@ The JKUSA Team
         
         return html, plain_text
 
+    @classmethod
+    def get_news_notification_email(cls, title: str, content: str, image_url: Optional[str], publisher_name: str) -> tuple[str, str]:
+        """Generate news notification email with modern blue theme"""
+        # Image section with responsive design
+        image_section = ""
+        if image_url:
+            image_section = f"""
+            <tr>
+                <td style="padding: 0; text-align: center;">
+                    <img src="{image_url}" alt="News Image" 
+                         style="width: 100%; max-width: 500px; height: auto; display: block; border-radius: 12px; margin: 24px auto; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);" />
+                </td>
+            </tr>
+            """
+        
+        content_html = f"""
+        <h2 style="color: {COLORS['primary_deep']}; font-size: 28px; font-weight: 700; margin: 0 0 20px; text-align: center;">
+            📰 Latest News Update
+        </h2>
+        
+        <div style="background: linear-gradient(135deg, {COLORS['primary_light']} 0%, {COLORS['primary_bright']} 100%); padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center;">
+            <h3 style="margin: 0; color: {COLORS['white']}; font-size: 22px; font-weight: 600; line-height: 1.3;">
+                {title}
+            </h3>
+        </div>
+        
+        <div style="background-color: {COLORS['white']}; padding: 24px; border-radius: 12px; border-left: 4px solid {COLORS['primary_medium']}; margin: 20px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);">
+            <p style="margin: 0; color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.7; white-space: pre-wrap;">
+{content}
+            </p>
+        </div>
+        
+        {image_section}
+        
+        <div style="background-color: {COLORS['neutral_light']}; padding: 20px; border-radius: 8px; margin: 24px 0; text-align: center;">
+            <p style="margin: 0 0 8px; color: {COLORS['gray_600']}; font-size: 14px; font-weight: 600;">
+                Published by:
+            </p>
+            <p style="margin: 0; color: {COLORS['primary_medium']}; font-size: 16px; font-weight: 600;">
+                {publisher_name}
+            </p>
+        </div>
+        
+        {cls._get_button("Read Full Article", FRONTEND_URL + "/news", "primary")}
+        
+        <div style="background-color: {COLORS['primary_light']}; padding: 16px; border-radius: 8px; margin: 24px 0; text-align: center;">
+            <p style="margin: 0; color: {COLORS['primary_deep']}; font-size: 14px; font-weight: 500;">
+                💡 Stay informed with the latest campus news and updates from JKUSA
+            </p>
+        </div>
+        """
+        
+        html = cls._get_base_template(
+            content_html,
+            preheader=f"Latest News: {title}"
+        )
+        
+        plain_text = f"""
+Latest News Update - JKUSA
+
+{title}
+
+{content}
+
+Published by: {publisher_name}
+
+Read the full article at: {FRONTEND_URL}/news
+
+Stay informed with the latest campus news and updates from JKUSA.
+
+Best regards,
+The JKUSA Team
+        """
+        
+        return html, plain_text
+
+    @classmethod
+    def get_event_notification_email(cls, title: str, description: str, start_date: str, end_date: Optional[str], location: str, image_url: Optional[str], admin_name: str) -> tuple[str, str]:
+        """Generate event notification email with modern blue theme"""
+        # Format dates
+        date_display = start_date
+        if end_date and end_date != start_date:
+            date_display = f"{start_date} - {end_date}"
+        
+        # Image section with responsive design
+        image_section = ""
+        if image_url:
+            image_section = f"""
+            <tr>
+                <td style="padding: 0; text-align: center;">
+                    <img src="{image_url}" alt="Event Image" 
+                         style="width: 100%; max-width: 500px; height: auto; display: block; border-radius: 12px; margin: 24px auto; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);" />
+                </td>
+            </tr>
+            """
+        
+        content_html = f"""
+        <h2 style="color: {COLORS['primary_deep']}; font-size: 28px; font-weight: 700; margin: 0 0 20px; text-align: center;">
+            🎉 New Event Alert
+        </h2>
+        
+        <div style="background: linear-gradient(135deg, {COLORS['primary_medium']} 0%, {COLORS['primary_bright']} 100%); padding: 24px; border-radius: 12px; margin: 20px 0; text-align: center;">
+            <h3 style="margin: 0 0 16px; color: {COLORS['white']}; font-size: 24px; font-weight: 600; line-height: 1.3;">
+                {title}
+            </h3>
+            <div style="background: rgba(255, 255, 255, 0.2); padding: 12px; border-radius: 8px; margin: 16px 0;">
+                <p style="margin: 0; color: {COLORS['white']}; font-size: 16px; font-weight: 500;">
+                    📅 {date_display}
+                </p>
+                <p style="margin: 4px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px;">
+                    📍 {location}
+                </p>
+            </div>
+        </div>
+        
+        <div style="background-color: {COLORS['white']}; padding: 24px; border-radius: 12px; border-left: 4px solid {COLORS['primary_medium']}; margin: 20px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);">
+            <h4 style="margin: 0 0 16px; color: {COLORS['primary_deep']}; font-size: 18px; font-weight: 600;">
+                Event Details
+            </h4>
+            <p style="margin: 0; color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.7; white-space: pre-wrap;">
+{description}
+            </p>
+        </div>
+        
+        {image_section}
+        
+        <div style="background-color: {COLORS['neutral_light']}; padding: 20px; border-radius: 8px; margin: 24px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div style="flex: 1; min-width: 200px;">
+                    <p style="margin: 0 0 4px; color: {COLORS['gray_600']}; font-size: 14px; font-weight: 600;">
+                        📅 Date & Time
+                    </p>
+                    <p style="margin: 0; color: {COLORS['primary_medium']}; font-size: 16px; font-weight: 600;">
+                        {date_display}
+                    </p>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <p style="margin: 0 0 4px; color: {COLORS['gray_600']}; font-size: 14px; font-weight: 600;">
+                        📍 Location
+                    </p>
+                    <p style="margin: 0; color: {COLORS['primary_medium']}; font-size: 16px; font-weight: 600;">
+                        {location}
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div style="background-color: {COLORS['primary_light']}; padding: 16px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <p style="margin: 0 0 8px; color: {COLORS['primary_deep']}; font-size: 14px; font-weight: 600;">
+                Organized by: {admin_name}
+            </p>
+        </div>
+        
+        {cls._get_button("View All Events", FRONTEND_URL + "/events", "primary")}
+        
+        <div style="background-color: {COLORS['primary_light']}; padding: 16px; border-radius: 8px; margin: 24px 0; text-align: center;">
+            <p style="margin: 0; color: {COLORS['primary_deep']}; font-size: 14px; font-weight: 500;">
+                🎯 Don't miss out on this exciting event! Mark your calendar and join us.
+            </p>
+        </div>
+        """
+        
+        html = cls._get_base_template(
+            content_html,
+            preheader=f"New Event: {title} - {date_display}"
+        )
+        
+        plain_text = f"""
+New Event Alert - JKUSA
+
+{title}
+
+Date: {date_display}
+Location: {location}
+
+Event Details:
+{description}
+
+Organized by: {admin_name}
+
+View all events at: {FRONTEND_URL}/events
+
+Don't miss out on this exciting event! Mark your calendar and join us.
+
+Best regards,
+The JKUSA Team
+        """
+        
+        return html, plain_text
+
     @staticmethod
     def send_email(
         to_email: str,
@@ -530,6 +720,26 @@ def send_welcome_email(email: str, user_name: str) -> bool:
     return EmailService.send_email(
         to_email=email,
         subject="Welcome to JKUSA! Your Account is Active",
+        html_content=html,
+        plain_text_content=plain
+    )
+
+def send_news_notification_email(email: str, title: str, content: str, image_url: Optional[str], publisher_name: str) -> bool:
+    """Send news notification email"""
+    html, plain = EmailService.get_news_notification_email(title, content, image_url, publisher_name)
+    return EmailService.send_email(
+        to_email=email,
+        subject=f"📰 Latest News: {title}",
+        html_content=html,
+        plain_text_content=plain
+    )
+
+def send_event_notification_email(email: str, title: str, description: str, start_date: str, end_date: Optional[str], location: str, image_url: Optional[str], admin_name: str) -> bool:
+    """Send event notification email"""
+    html, plain = EmailService.get_event_notification_email(title, description, start_date, end_date, location, image_url, admin_name)
+    return EmailService.send_email(
+        to_email=email,
+        subject=f"🎉 New Event: {title}",
         html_content=html,
         plain_text_content=plain
     )

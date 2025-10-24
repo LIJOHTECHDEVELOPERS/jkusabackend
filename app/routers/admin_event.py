@@ -2,9 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.event import Event 
+from app.models.student import student as StudentModel
+from app.models.subscriber import Subscriber
 from app.schemas.event import EventCreate, Event as EventSchema
 from app.auth.auth import get_current_admin
 from app.services.s3_service import s3_service
+from app.services.email_service import send_event_notification_email
 from datetime import datetime
 from typing import List, Optional
 import logging
@@ -192,6 +195,72 @@ async def create_event(
         
         duration_str = f"{start_date.date()} to {end_date.date()}" if end_date else str(start_date.date())
         logger.info(f"Admin {current_admin.username} created event ID {db_event.id}: {title} ({duration_str}, slug: {slug})")
+        
+        # Send email notifications to students and subscribers
+        try:
+            # Get all active students
+            students = db.query(StudentModel).filter(StudentModel.is_active == True).all()
+            # Get all active subscribers
+            subscribers = db.query(Subscriber).filter(Subscriber.is_active == True).all()
+            
+            # Combine all recipients (avoid duplicates)
+            all_recipients = []
+            student_emails = set()
+            
+            # Add students
+            for student in students:
+                if student.email not in student_emails:
+                    all_recipients.append({
+                        "email": student.email,
+                        "name": student.full_name,
+                        "type": "student"
+                    })
+                    student_emails.add(student.email)
+            
+            # Add subscribers (excluding students)
+            for subscriber in subscribers:
+                if subscriber.email not in student_emails:
+                    all_recipients.append({
+                        "email": subscriber.email,
+                        "name": "Subscriber",
+                        "type": "subscriber"
+                    })
+            
+            # Send emails
+            admin_name = f"{current_admin.first_name} {current_admin.last_name}"
+            successful_emails = 0
+            failed_emails = 0
+            
+            # Format dates for email
+            start_date_str = start_date.strftime("%B %d, %Y at %I:%M %p")
+            end_date_str = end_date.strftime("%B %d, %Y at %I:%M %p") if end_date else None
+            
+            for recipient in all_recipients:
+                try:
+                    success = send_event_notification_email(
+                        to_email=recipient["email"],
+                        title=title,
+                        description=description,
+                        start_date=start_date_str,
+                        end_date=end_date_str,
+                        location=location,
+                        image_url=image_url,
+                        admin_name=admin_name
+                    )
+                    if success:
+                        successful_emails += 1
+                    else:
+                        failed_emails += 1
+                except Exception as e:
+                    logger.error(f"Failed to send event email to {recipient['email']}: {str(e)}")
+                    failed_emails += 1
+            
+            logger.info(f"Event notification emails sent: {successful_emails} successful, {failed_emails} failed")
+            
+        except Exception as e:
+            logger.error(f"Error sending event notification emails: {str(e)}")
+            # Don't fail the event creation if email sending fails
+        
         return db_event
         
     except HTTPException:
@@ -369,6 +438,73 @@ async def update_event(
                 logger.warning(f"Failed to delete removed image: {cleanup_error}")
         
         logger.info(f"Admin {current_admin.username} updated event ID {event_id}. Changes: {', '.join(changes_made)}")
+        
+        # Send email notifications for updates (only if significant changes)
+        if updated and any(field in changes_made for field in ["title", "description", "start_date", "end_date", "location", "image"]):
+            try:
+                # Get all active students
+                students = db.query(StudentModel).filter(StudentModel.is_active == True).all()
+                # Get all active subscribers
+                subscribers = db.query(Subscriber).filter(Subscriber.is_active == True).all()
+                
+                # Combine all recipients (avoid duplicates)
+                all_recipients = []
+                student_emails = set()
+                
+                # Add students
+                for student in students:
+                    if student.email not in student_emails:
+                        all_recipients.append({
+                            "email": student.email,
+                            "name": student.full_name,
+                            "type": "student"
+                        })
+                        student_emails.add(student.email)
+                
+                # Add subscribers (excluding students)
+                for subscriber in subscribers:
+                    if subscriber.email not in student_emails:
+                        all_recipients.append({
+                            "email": subscriber.email,
+                            "name": "Subscriber",
+                            "type": "subscriber"
+                        })
+                
+                # Send emails
+                admin_name = f"{current_admin.first_name} {current_admin.last_name}"
+                successful_emails = 0
+                failed_emails = 0
+                
+                # Format dates for email
+                start_date_str = db_event.start_date.strftime("%B %d, %Y at %I:%M %p")
+                end_date_str = db_event.end_date.strftime("%B %d, %Y at %I:%M %p") if db_event.end_date else None
+                
+                for recipient in all_recipients:
+                    try:
+                        success = send_event_notification_email(
+                            to_email=recipient["email"],
+                            title=db_event.title,
+                            description=db_event.description,
+                            start_date=start_date_str,
+                            end_date=end_date_str,
+                            location=db_event.location,
+                            image_url=db_event.image_url,
+                            admin_name=admin_name
+                        )
+                        if success:
+                            successful_emails += 1
+                        else:
+                            failed_emails += 1
+                    except Exception as e:
+                        logger.error(f"Failed to send event update email to {recipient['email']}: {str(e)}")
+                        failed_emails += 1
+                
+                logger.info(f"Event update notification emails sent: {successful_emails} successful, {failed_emails} failed")
+                
+            except Exception as e:
+                logger.error(f"Error sending event update notification emails: {str(e)}")
+                # Don't fail the event update if email sending fails
+        
         return db_event
         
     except HTTPException:

@@ -10,7 +10,10 @@ from app.models.news import News as NewsModel
 from app.schemas.news import News as NewsSchema, NewsCreate, NewsUpdate
 
 from app.models.admin import Admin
+from app.models.student import student as StudentModel
+from app.models.subscriber import Subscriber
 from app.services.s3_service import s3_service
+from app.services.email_service import send_news_notification_email
 from datetime import datetime
 from typing import Optional
 import logging
@@ -136,6 +139,65 @@ def create_news(
         db.commit()
         db.refresh(db_news)
         logger.info(f"Created article ID {db_news.id}: {db_news.title} (slug: {slug})")
+        
+        # Send email notifications to students and subscribers
+        try:
+            # Get all active students
+            students = db.query(StudentModel).filter(StudentModel.is_active == True).all()
+            # Get all active subscribers
+            subscribers = db.query(Subscriber).filter(Subscriber.is_active == True).all()
+            
+            # Combine all recipients (avoid duplicates)
+            all_recipients = []
+            student_emails = set()
+            
+            # Add students
+            for student in students:
+                if student.email not in student_emails:
+                    all_recipients.append({
+                        "email": student.email,
+                        "name": student.full_name,
+                        "type": "student"
+                    })
+                    student_emails.add(student.email)
+            
+            # Add subscribers (excluding students)
+            for subscriber in subscribers:
+                if subscriber.email not in student_emails:
+                    all_recipients.append({
+                        "email": subscriber.email,
+                        "name": "Subscriber",
+                        "type": "subscriber"
+                    })
+            
+            # Send emails
+            publisher_name = f"{current_user.first_name} {current_user.last_name}"
+            successful_emails = 0
+            failed_emails = 0
+            
+            for recipient in all_recipients:
+                try:
+                    success = send_news_notification_email(
+                        to_email=recipient["email"],
+                        title=title,
+                        content=content,
+                        image_url=featured_image_url,
+                        publisher_name=publisher_name
+                    )
+                    if success:
+                        successful_emails += 1
+                    else:
+                        failed_emails += 1
+                except Exception as e:
+                    logger.error(f"Failed to send news email to {recipient['email']}: {str(e)}")
+                    failed_emails += 1
+            
+            logger.info(f"News notification emails sent: {successful_emails} successful, {failed_emails} failed")
+            
+        except Exception as e:
+            logger.error(f"Error sending news notification emails: {str(e)}")
+            # Don't fail the news creation if email sending fails
+        
     except IntegrityError as e:
         db.rollback()
         logger.error(f"Database integrity error: {e}")
@@ -354,6 +416,66 @@ def update_news(
         db.commit()
         db.refresh(db_news)
         logger.info(f"Successfully updated article ID {news_id}. Changes: {', '.join(changes_made)}")
+        
+        # Send email notifications for updates (only if significant changes)
+        if updated and any(field in changes_made for field in ["title", "content", "featured_image"]):
+            try:
+                # Get all active students
+                students = db.query(StudentModel).filter(StudentModel.is_active == True).all()
+                # Get all active subscribers
+                subscribers = db.query(Subscriber).filter(Subscriber.is_active == True).all()
+                
+                # Combine all recipients (avoid duplicates)
+                all_recipients = []
+                student_emails = set()
+                
+                # Add students
+                for student in students:
+                    if student.email not in student_emails:
+                        all_recipients.append({
+                            "email": student.email,
+                            "name": student.full_name,
+                            "type": "student"
+                        })
+                        student_emails.add(student.email)
+                
+                # Add subscribers (excluding students)
+                for subscriber in subscribers:
+                    if subscriber.email not in student_emails:
+                        all_recipients.append({
+                            "email": subscriber.email,
+                            "name": "Subscriber",
+                            "type": "subscriber"
+                        })
+                
+                # Send emails
+                publisher_name = f"{current_user.first_name} {current_user.last_name}"
+                successful_emails = 0
+                failed_emails = 0
+                
+                for recipient in all_recipients:
+                    try:
+                        success = send_news_notification_email(
+                            to_email=recipient["email"],
+                            title=db_news.title,
+                            content=db_news.content,
+                            image_url=db_news.featured_image_url,
+                            publisher_name=publisher_name
+                        )
+                        if success:
+                            successful_emails += 1
+                        else:
+                            failed_emails += 1
+                    except Exception as e:
+                        logger.error(f"Failed to send news update email to {recipient['email']}: {str(e)}")
+                        failed_emails += 1
+                
+                logger.info(f"News update notification emails sent: {successful_emails} successful, {failed_emails} failed")
+                
+            except Exception as e:
+                logger.error(f"Error sending news update notification emails: {str(e)}")
+                # Don't fail the news update if email sending fails
+        
     except IntegrityError as e:
         db.rollback()
         logger.error(f"Database integrity error: {e}")
