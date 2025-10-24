@@ -1,6 +1,3 @@
-# ==================== MODELS ====================
-# app/models/registration.py
-
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, JSON, ForeignKey, Enum as SQLEnum, Table, select
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -77,7 +74,19 @@ class FormField(Base):
     
     # Relationships
     form = relationship("Form", back_populates="fields")
-    conditions = relationship("FormCondition", back_populates="field", cascade="all, delete-orphan")
+    conditions = relationship(
+        "FormCondition",
+        foreign_keys="FormCondition.field_id",
+        back_populates="field",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    dependent_conditions = relationship(
+        "FormCondition",
+        foreign_keys="FormCondition.depends_on_field_id",
+        back_populates="depends_on_field",
+        lazy="selectin"
+    )
     
     def __repr__(self):
         return f"<FormField(id={self.id}, form_id={self.form_id}, label={self.label})>"
@@ -92,7 +101,18 @@ class FormCondition(Base):
     value = Column(String(255), nullable=False)
     
     # Relationships
-    field = relationship("FormField", back_populates="conditions", foreign_keys=[field_id])
+    field = relationship(
+        "FormField",
+        foreign_keys=[field_id],
+        back_populates="conditions",
+        lazy="selectin"
+    )
+    depends_on_field = relationship(
+        "FormField",
+        foreign_keys=[depends_on_field_id],
+        back_populates="dependent_conditions",
+        lazy="selectin"
+    )
     
     def __repr__(self):
         return f"<FormCondition(id={self.id}, depends_on={self.depends_on_field_id})>"
