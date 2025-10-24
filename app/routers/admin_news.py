@@ -178,7 +178,7 @@ def create_news(
             for recipient in all_recipients:
                 try:
                     success = send_news_notification_email(
-                        to_email=recipient["email"],
+                        email=recipient["email"],
                         title=title,
                         content=content,
                         image_url=featured_image_url,
@@ -456,7 +456,7 @@ def update_news(
                 for recipient in all_recipients:
                     try:
                         success = send_news_notification_email(
-                            to_email=recipient["email"],
+                            email=recipient["email"],
                             title=db_news.title,
                             content=db_news.content,
                             image_url=db_news.featured_image_url,
