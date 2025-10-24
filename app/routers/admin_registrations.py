@@ -53,7 +53,7 @@ async def create_form(
             created_by=current_admin.id,
             open_date=form_data.open_date,
             close_date=form_data.close_date,
-            status=form_data.status.value if form_data.status else FormStatus.DRAFT.value,
+            status=form_data.status.value if form_data.status else FormStatus.draft.value,
             target_all_students=form_data.target_all_students,
             target_years=form_data.target_years or []
         )
