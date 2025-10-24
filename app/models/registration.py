@@ -110,7 +110,7 @@ class FormSubmission(Base):
     
     # Relationships
     form = relationship("Form", back_populates="submissions")
-    student = relationship("Student", back_populates="form_submissions")
+    student = relationship("student", back_populates="form_submissions")
     
     def __repr__(self):
         return f"<FormSubmission(id={self.id}, form_id={self.form_id}, student_id={self.student_id})>"
