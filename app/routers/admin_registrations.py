@@ -44,7 +44,8 @@ async def create_form(
                 )
         
         # Log the validated status to debug
-        logger.debug(f"Validated status: {form_data.status}")
+        status_value = form_data.status.value if form_data.status else FormStatus.DRAFT.value
+        logger.debug(f"Validated status: {status_value}")
         
         # Create form using validated FormCreate data
         db_form = Form(
@@ -53,7 +54,7 @@ async def create_form(
             created_by=current_admin.id,
             open_date=form_data.open_date,
             close_date=form_data.close_date,
-            status=form_data.status.value if form_data.status else FormStatus.draft.value,
+            status=status_value,
             target_all_students=form_data.target_all_students,
             target_years=form_data.target_years or []
         )
@@ -109,7 +110,7 @@ async def create_form(
 async def list_forms(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    status_filter: Optional[FormStatus] = None,
+    status_filter: Optional[str] = None,
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
 ):
@@ -118,7 +119,14 @@ async def list_forms(
     
     query = db.query(Form)
     if status_filter:
-        query = query.filter(Form.status == status_filter.value)
+        try:
+            status_enum = FormStatus(status_filter)
+            query = query.filter(Form.status == status_enum.value)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {', '.join([s.value for s in FormStatus])}"
+            )
     
     forms = query.order_by(Form.created_at.desc()).offset(skip).limit(limit).all()
     return forms
@@ -163,14 +171,29 @@ async def update_form(
         
         # Ensure status is a valid FormStatus enum value
         if 'status' in update_data:
-            logger.debug(f"Updating status to: {update_data['status']}")
-            update_data['status'] = FormStatus(update_data['status']).value
+            try:
+                status_enum = FormStatus(update_data['status'])
+                update_data['status'] = status_enum.value
+                logger.debug(f"Updating status to: {update_data['status']}")
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid status. Must be one of: {', '.join([s.value for s in FormStatus])}"
+                )
         
         # Handle target school updates
         if 'target_school_ids' in update_data:
             school_ids = update_data.pop('target_school_ids')
-            schools = db.query(School).filter(School.id.in_(school_ids)).all()
-            db_form.assigned_schools = schools
+            if school_ids:
+                schools = db.query(School).filter(School.id.in_(school_ids)).all()
+                if len(schools) != len(school_ids):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="One or more schools not found"
+                    )
+                db_form.assigned_schools = schools
+            else:
+                db_form.assigned_schools = []
         
         # Update form fields
         for key, value in update_data.items():
@@ -184,6 +207,8 @@ async def update_form(
         logger.info(f"Admin {current_admin.username} updated form ID {form_id}")
         return db_form
         
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating form: {str(e)}")
@@ -229,7 +254,7 @@ async def publish_form(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
 ):
-    """Publish a form (change status to OPEN)"""
+    """Publish a form (change status to open)"""
     logger.debug(f"Admin {current_admin.username} publishing form ID: {form_id}")
     
     db_form = db.query(Form).filter(Form.id == form_id).first()
@@ -252,7 +277,7 @@ async def close_form(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
 ):
-    """Close a form (change status to CLOSED)"""
+    """Close a form (change status to closed)"""
     logger.debug(f"Admin {current_admin.username} closing form ID: {form_id}")
     
     db_form = db.query(Form).filter(Form.id == form_id).first()
@@ -458,12 +483,12 @@ async def get_form_analytics(
         responses = [sub.data.get(str(field.id)) for sub in submissions if str(field.id) in sub.data]
         
         response_breakdown = {}
-        if field.field_type == "boolean":
+        if field.field_type.value == "boolean":
             response_breakdown = {
                 "true": sum(1 for r in responses if r is True),
                 "false": sum(1 for r in responses if r is False)
             }
-        elif field.field_type == "select":
+        elif field.field_type.value == "select":
             response_breakdown = {}
             for response in responses:
                 response_breakdown[response] = response_breakdown.get(response, 0) + 1
