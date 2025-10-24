@@ -66,6 +66,9 @@ class FormField(FormFieldCreate):
     class Config:
         from_attributes = True
 
+# Alias for backwards compatibility
+FormFieldSchema = FormField
+
 # -------------------- Form Schemas --------------------
 class FormCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
