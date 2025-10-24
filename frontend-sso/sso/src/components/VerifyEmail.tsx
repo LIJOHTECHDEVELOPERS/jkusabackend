@@ -1,8 +1,9 @@
 import { FC, useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import Button from './ui/Button'
-import Alert from './ui/Alert'
+import {Input } from './ui/input'
+import { Button } from './ui/button' // Assuming Button is a named export
+import { Alert } from './ui/alert'
 import { 
   EnvelopeIcon, 
   ArrowPathIcon, 
