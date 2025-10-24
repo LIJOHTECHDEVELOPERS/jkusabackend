@@ -43,23 +43,16 @@ async def create_form(
                     detail="One or more schools not found"
                 )
         
-        # Create form with explicit status handling
-        form_dict = form_data.dict(exclude_unset=True)
-        # Ensure status is a valid FormStatus enum value
-        if 'status' in form_dict:
-            form_dict['status'] = FormStatus(form_dict['status']).value
-        else:
-            form_dict['status'] = FormStatus.DRAFT.value  # Default to lowercase 'draft'
-        
+        # Create form using validated FormCreate data
         db_form = Form(
-            title=form_dict['title'],
-            description=form_dict.get('description'),
+            title=form_data.title,
+            description=form_data.description,
             created_by=current_admin.id,
-            open_date=form_dict['open_date'],
-            close_date=form_dict['close_date'],
-            status=form_dict['status'],
-            target_all_students=form_dict.get('target_all_students', False),
-            target_years=form_dict.get('target_years', [])
+            open_date=form_data.open_date,
+            close_date=form_data.close_date,
+            status=form_data.status.value if form_data.status else FormStatus.DRAFT.value,
+            target_all_students=form_data.target_all_students,
+            target_years=form_data.target_years or []
         )
         db.add(db_form)
         db.flush()
@@ -122,7 +115,7 @@ async def list_forms(
     
     query = db.query(Form)
     if status_filter:
-        query = query.filter(Form.status == status_filter)
+        query = query.filter(Form.status == status_filter.value)
     
     forms = query.order_by(Form.created_at.desc()).offset(skip).limit(limit).all()
     return forms
