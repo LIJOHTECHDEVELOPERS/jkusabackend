@@ -120,6 +120,13 @@ class FormSubmissionCreate(BaseModel):
     """Represents the data sent by a user to create a new submission."""
     data: Dict[int, Any] # Dictionary mapping field_id (int) to the submitted value (Any)
 
+class FormSubmissionUpdate(BaseModel):
+    """Represents data for updating an existing form submission."""
+    data: Dict[int, Any]  # Dictionary mapping field_id to updated values
+    
+    class Config:
+        from_attributes = True
+
 class FormSubmissionResponse(BaseModel):
     """Represents a full form submission retrieved from the database."""
     id: int
@@ -131,7 +138,7 @@ class FormSubmissionResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# -------------------- Analytics Schemas (NEW FIX) --------------------
+# -------------------- Analytics Schemas --------------------
 class FieldAnalytics(BaseModel):
     """Schema for individual field analytics within a form."""
     field_id: int
@@ -144,7 +151,7 @@ class FieldAnalytics(BaseModel):
 class FormAnalyticsResponse(BaseModel):
     """
     Response schema for the form analytics endpoint.
-    This is the missing class causing the ImportError.
+    Contains aggregated analytics data for a form and its submissions.
     """
     form_id: int
     form_title: str
