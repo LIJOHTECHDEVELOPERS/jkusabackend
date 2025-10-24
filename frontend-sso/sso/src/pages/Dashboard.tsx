@@ -1,5 +1,5 @@
-import { FC, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FC } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
   AcademicCapIcon,

@@ -8,7 +8,7 @@ import ForgotPassword from './components/ForgotPassword'
 import ResetPasswordConfirm from './components/ResetPasswordConfirm'
 import VerifyEmail from './components/VerifyEmail'
 import Dashboard from './pages/Dashboard'
-import StudentFormsPage from './pages/StudentFormsPage'
+import StudentFormsPage from './pages/StudentsFormsPage'
 
 const App: React.FC = () => {
   return (

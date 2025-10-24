@@ -1,9 +1,9 @@
-import { FC, useState, useEffect } from 'react'
+import { type FC, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import Input from './ui/Input'
-import Button from './ui/Button'
-import Alert from './ui/Alert'
+import { Input } from './ui/input'
+import { Button } from './ui/button'
+import { Alert } from './ui/alert'
 import { 
   UserIcon, 
   EnvelopeIcon, 

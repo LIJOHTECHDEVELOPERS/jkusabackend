@@ -1,4 +1,4 @@
-import { FC, ReactNode } from 'react'
+import { type FC, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
