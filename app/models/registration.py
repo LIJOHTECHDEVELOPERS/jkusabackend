@@ -26,7 +26,7 @@ form_school_assignment = Table(
     'form_school_assignment',
     Base.metadata,
     Column('form_id', Integer, ForeignKey('form.id', ondelete='CASCADE')),
-    Column('school_id', Integer, ForeignKey('school.id', ondelete='CASCADE'))
+    Column('school_id', Integer, ForeignKey('schools.id', ondelete='CASCADE'))
 )
 
 # Association table for form assignment to years
@@ -43,7 +43,7 @@ class Form(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    created_by = Column(Integer, ForeignKey('admin.id'), nullable=False)
+    created_by = Column(Integer, ForeignKey('admins.id'), nullable=False)
     open_date = Column(DateTime, nullable=False)
     close_date = Column(DateTime, nullable=False)
     status = Column(SQLEnum(FormStatus), default=FormStatus.DRAFT, index=True)
@@ -102,7 +102,7 @@ class FormSubmission(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     form_id = Column(Integer, ForeignKey('form.id', ondelete='CASCADE'), nullable=False)
-    student_id = Column(Integer, ForeignKey('student.id', ondelete='CASCADE'), nullable=False)
+    student_id = Column(Integer, ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
     data = Column(JSON, nullable=False)  # {field_id: value, ...}
     submitted_at = Column(DateTime, default=datetime.utcnow)
     last_edited_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
