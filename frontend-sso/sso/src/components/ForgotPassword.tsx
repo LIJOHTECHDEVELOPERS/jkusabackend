@@ -1,9 +1,9 @@
 import { FC, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import Input from './ui/Input'
-import Button from './ui/Button'
-import Alert from './ui/Alert'
+import {Input } from './ui/input'
+import { Button } from './ui/button' // Assuming Button is a named export
+import { Alert } from './ui/alert'
 import { EnvelopeIcon, LockClosedIcon } from '@heroicons/react/24/outline'
 
 const ForgotPassword: FC = () => {
