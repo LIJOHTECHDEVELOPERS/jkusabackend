@@ -36,11 +36,9 @@ def generate_slug(title: str, db: Session, event_id: int = None) -> str:
 def optimize_and_upload_image(image: UploadFile) -> str:
     """Optimize image and upload to S3 (1200x630 for social media)"""
     try:
-        # Read and open the image
         contents = image.file.read()
         img = Image.open(io.BytesIO(contents))
         
-        # Convert to RGB if necessary (handles PNG with transparency)
         if img.mode in ('RGBA', 'LA', 'P'):
             background = Image.new('RGB', img.size, (255, 255, 255))
             if img.mode == 'P':
@@ -50,46 +48,37 @@ def optimize_and_upload_image(image: UploadFile) -> str:
         elif img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Calculate dimensions to maintain aspect ratio and crop to 1200x630
         target_width = 1200
         target_height = 630
         img_ratio = img.width / img.height
         target_ratio = target_width / target_height
         
         if img_ratio > target_ratio:
-            # Image is wider, scale by height
             new_height = target_height
             new_width = int(new_height * img_ratio)
         else:
-            # Image is taller, scale by width
             new_width = target_width
             new_height = int(new_width / img_ratio)
         
-        # Resize image
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        # Crop to exact dimensions (center crop)
         left = (new_width - target_width) // 2
         top = (new_height - target_height) // 2
         right = left + target_width
         bottom = top + target_height
         img = img.crop((left, top, right, bottom))
         
-        # Compress and save to bytes
         output = io.BytesIO()
         img.save(output, format='JPEG', quality=85, optimize=True)
         output.seek(0)
         
-        # Create a new UploadFile-like object with optimized image
         optimized_file = type('obj', (object,), {
             'file': output,
             'filename': image.filename,
             'content_type': 'image/jpeg'
         })()
         
-        # Upload to S3
         image_url = s3_service.upload_image(optimized_file)
-        
         return image_url
         
     except Exception as e:
@@ -105,7 +94,7 @@ def read_public_events(
     """Get all events with pagination (Public access)"""
     logger.debug(f"Accessing public events: skip={skip}, limit={limit}")
     try:
-        events = db.query(Event).order_by(Event.date.desc()).offset(skip).limit(limit).all()
+        events = db.query(Event).order_by(Event.start_date.desc()).offset(skip).limit(limit).all()
         logger.info(f"Retrieved {len(events)} events")
         return events
     except Exception as e:
@@ -152,17 +141,23 @@ def read_public_event(
 async def create_event(
     title: str = Form(..., min_length=1, max_length=200),
     description: str = Form(..., min_length=1),
-    date: datetime = Form(...),
+    start_date: datetime = Form(...),
+    end_date: Optional[datetime] = Form(None),
     location: str = Form(..., min_length=1),
     image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
 ):
-    """Create a new event with optimized image (Admin only)"""
+    """Create a new event with optional end_date for multi-day events (Admin only)"""
     logger.debug(f"Creating event by admin: {current_admin.username}")
     
     image_url = None
     try:
+        # Validate dates
+        if end_date and end_date < start_date:
+            logger.error(f"Invalid date range: end_date ({end_date}) before start_date ({start_date})")
+            raise HTTPException(status_code=400, detail="end_date must be equal to or after start_date")
+        
         # Validate image if provided
         if image:
             if not image.content_type.startswith('image/'):
@@ -172,7 +167,6 @@ async def create_event(
                 logger.error(f"Image too large: {image.size} bytes")
                 raise HTTPException(status_code=400, detail="Image must be less than 5MB")
             
-            # Optimize and upload image
             logger.debug(f"Optimizing and uploading image: {image.filename}")
             image_url = optimize_and_upload_image(image)
             if not image_url:
@@ -180,15 +174,14 @@ async def create_event(
                 raise HTTPException(status_code=500, detail="Failed to upload image")
             logger.debug(f"Image uploaded successfully: {image_url}")
 
-        # Generate unique slug
         slug = generate_slug(title, db)
         logger.debug(f"Generated slug: {slug}")
 
-        # Create event
         db_event = Event(
             title=title.strip(),
             description=description.strip(),
-            date=date,
+            start_date=start_date,
+            end_date=end_date,
             location=location.strip(),
             image_url=image_url,
             slug=slug
@@ -197,7 +190,8 @@ async def create_event(
         db.commit()
         db.refresh(db_event)
         
-        logger.info(f"Admin {current_admin.username} created event ID {db_event.id}: {title} (slug: {slug})")
+        duration_str = f"{start_date.date()} to {end_date.date()}" if end_date else str(start_date.date())
+        logger.info(f"Admin {current_admin.username} created event ID {db_event.id}: {title} ({duration_str}, slug: {slug})")
         return db_event
         
     except HTTPException:
@@ -237,7 +231,7 @@ def read_events(
 ):
     """Get all events with pagination (Admin only)"""
     logger.debug(f"Admin {current_admin.username} fetching events: skip={skip}, limit={limit}")
-    events = db.query(Event).order_by(Event.date.desc()).offset(skip).limit(limit).all()
+    events = db.query(Event).order_by(Event.start_date.desc()).offset(skip).limit(limit).all()
     logger.info(f"Retrieved {len(events)} events for admin")
     return events
 
@@ -246,37 +240,23 @@ async def update_event(
     event_id: int,
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    date: Optional[datetime] = Form(None),
+    start_date: Optional[datetime] = Form(None),
+    end_date: Optional[datetime] = Form(None),
     location: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     remove_image: Optional[str] = Form("false"),
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin)
 ):
-    """Update an existing event with enhanced image handling (Admin only)"""
+    """Update an existing event with multi-day support (Admin only)"""
     logger.debug(f"Updating event ID: {event_id} by admin: {current_admin.username}")
-    logger.debug(f"Received parameters:")
-    logger.debug(f"  - title: {title}")
-    logger.debug(f"  - description: {description[:50] + '...' if description and len(description) > 50 else description}")
-    logger.debug(f"  - date: {date}")
-    logger.debug(f"  - location: {location}")
-    logger.debug(f"  - image: {image.filename if image else None}")
-    logger.debug(f"  - remove_image: {remove_image}")
     
-    # Fetch the existing event
     db_event = db.query(Event).filter(Event.id == event_id).first()
     if db_event is None:
         logger.warning(f"Event ID {event_id} not found")
         raise HTTPException(status_code=404, detail="Event not found")
 
-    # Log current event state
-    logger.debug(f"Current event state:")
-    logger.debug(f"  - title: {db_event.title}")
-    logger.debug(f"  - slug: {db_event.slug}")
-    logger.debug(f"  - description: {db_event.description[:50] + '...' if len(db_event.description) > 50 else db_event.description}")
-    logger.debug(f"  - date: {db_event.date}")
-    logger.debug(f"  - location: {db_event.location}")
-    logger.debug(f"  - image_url: {db_event.image_url}")
+    logger.debug(f"Current event state: title={db_event.title}, start_date={db_event.start_date}, end_date={db_event.end_date}")
 
     new_image_url = None
     old_image_url = db_event.image_url
@@ -284,7 +264,6 @@ async def update_event(
     changes_made = []
     
     try:
-        # Validate new image if provided
         if image:
             if not image.content_type.startswith('image/'):
                 logger.error(f"Invalid file type: {image.content_type}")
@@ -293,103 +272,88 @@ async def update_event(
                 logger.error(f"Image too large: {image.size} bytes")
                 raise HTTPException(status_code=400, detail="Image must be less than 5MB")
         
-        # Update title and regenerate slug if changed
         if title is not None:
             title_trimmed = title.strip()
             if title_trimmed != db_event.title:
                 if len(title_trimmed) < 1 or len(title_trimmed) > 200:
-                    logger.error(f"Invalid title length: {len(title_trimmed)}")
                     raise HTTPException(status_code=400, detail="Title must be 1-200 characters")
                 
-                logger.debug(f"Title change detected: '{db_event.title}' -> '{title_trimmed}'")
+                logger.debug(f"Title changed: '{db_event.title}' -> '{title_trimmed}'")
                 db_event.title = title_trimmed
-                
-                # Regenerate slug when title changes
                 new_slug = generate_slug(title_trimmed, db, event_id)
-                logger.debug(f"Slug updated: '{db_event.slug}' -> '{new_slug}'")
                 db_event.slug = new_slug
-                
                 updated = True
-                changes_made.append("title")
-                changes_made.append("slug")
-            else:
-                logger.debug("Title unchanged")
+                changes_made.extend(["title", "slug"])
 
-        # Update description
         if description is not None:
             description_trimmed = description.strip()
             if description_trimmed != db_event.description:
                 if len(description_trimmed) < 1:
-                    logger.error("Description cannot be empty")
                     raise HTTPException(status_code=400, detail="Description must not be empty")
                 
-                logger.debug(f"Description change detected (length: {len(db_event.description)} -> {len(description_trimmed)})")
                 db_event.description = description_trimmed
                 updated = True
                 changes_made.append("description")
-            else:
-                logger.debug("Description unchanged")
 
-        # Update date
-        if date is not None:
-            if date != db_event.date:
-                logger.debug(f"Date change detected: '{db_event.date}' -> '{date}'")
-                db_event.date = date
+        if start_date is not None:
+            if start_date != db_event.start_date:
+                logger.debug(f"Start date changed: '{db_event.start_date}' -> '{start_date}'")
+                db_event.start_date = start_date
                 updated = True
-                changes_made.append("date")
-            else:
-                logger.debug("Date unchanged")
+                changes_made.append("start_date")
 
-        # Update location
+        if end_date is not None:
+            if end_date != db_event.end_date:
+                logger.debug(f"End date changed: '{db_event.end_date}' -> '{end_date}'")
+                db_event.end_date = end_date
+                updated = True
+                changes_made.append("end_date")
+        
+        # Handle end_date removal (convert multi-day to single-day)
+        if end_date is None and "end_date" not in str(Form(...)):
+            # Only remove end_date if explicitly clearing it
+            if db_event.end_date is not None and remove_image != "remove_end_date":
+                pass  # Only update if explicitly sent
+
         if location is not None:
             location_trimmed = location.strip()
             if location_trimmed != db_event.location:
                 if len(location_trimmed) < 1:
-                    logger.error("Location cannot be empty")
                     raise HTTPException(status_code=400, detail="Location must not be empty")
                 
-                logger.debug(f"Location change detected: '{db_event.location}' -> '{location_trimmed}'")
                 db_event.location = location_trimmed
                 updated = True
                 changes_made.append("location")
-            else:
-                logger.debug("Location unchanged")
 
-        # Handle image update or removal
+        # Validate date range
+        final_start = db_event.start_date
+        final_end = db_event.end_date
+        if final_end and final_end < final_start:
+            raise HTTPException(status_code=400, detail="end_date must be equal to or after start_date")
+
         if image:
-            # Optimize and upload new image
-            logger.debug(f"Optimizing and uploading new image: {image.filename}")
+            logger.debug(f"Uploading new image: {image.filename}")
             new_image_url = optimize_and_upload_image(image)
             if not new_image_url:
-                logger.error("Failed to upload optimized image")
                 raise HTTPException(status_code=500, detail="Failed to upload image")
             
-            logger.debug(f"Image change detected: '{db_event.image_url}' -> '{new_image_url}'")
             db_event.image_url = new_image_url
             updated = True
             changes_made.append("image")
             
         elif remove_image == "true" and db_event.image_url:
-            logger.debug(f"Removing existing image: {db_event.image_url}")
+            logger.debug(f"Removing image: {db_event.image_url}")
             db_event.image_url = None
             updated = True
             changes_made.append("removed_image")
 
-        # Log update summary
-        logger.debug(f"Update summary:")
-        logger.debug(f"  - Changes detected: {updated}")
-        logger.debug(f"  - Fields changed: {changes_made}")
-
-        # Handle the case when no changes are detected
         if not updated:
-            logger.info("No changes detected - returning existing event without error")
+            logger.info("No changes detected")
             return db_event
 
-        # Commit changes
         db.commit()
         db.refresh(db_event)
         
-        # Delete old image if new one was uploaded successfully
         if new_image_url and old_image_url:
             try:
                 s3_service.delete_image(old_image_url)
@@ -397,7 +361,6 @@ async def update_event(
             except Exception as cleanup_error:
                 logger.warning(f"Failed to delete old image: {cleanup_error}")
         
-        # Delete old image if removal was requested
         if remove_image == "true" and old_image_url:
             try:
                 s3_service.delete_image(old_image_url)
@@ -415,7 +378,7 @@ async def update_event(
         if new_image_url:
             try:
                 s3_service.delete_image(new_image_url)
-                logger.debug(f"Cleaned up uploaded image after error: {new_image_url}")
+                logger.debug(f"Cleaned up uploaded image: {new_image_url}")
             except Exception as cleanup_error:
                 logger.error(f"Failed to cleanup uploaded image: {cleanup_error}")
         

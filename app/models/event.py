@@ -6,7 +6,8 @@ class Event(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(String)
-    date = Column(DateTime)
+    start_date = Column(DateTime)  # Changed from 'date' to 'start_date'
+    end_date = Column(DateTime, nullable=True)  # New: end_date for multi-day events
     location = Column(String)
     image_url = Column(String, nullable=True)
-    slug = Column(String, unique=True, index=True, nullable=False)  # Added slug field
+    slug = Column(String, unique=True, index=True, nullable=False)
