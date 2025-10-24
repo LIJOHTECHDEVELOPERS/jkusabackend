@@ -1,12 +1,8 @@
 import { FC } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { 
-  AcademicCapIcon,
   HomeIcon,
-  UserIcon,
-  ChartBarIcon,
   DocumentTextIcon,
-  CogIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
@@ -23,11 +19,7 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
-    { id: 'profile', label: 'My Profile', icon: UserIcon, path: '/profile' },
-    { id: 'academics', label: 'Academics', icon: AcademicCapIcon, path: '/academics' },
-    { id: 'results', label: 'Results', icon: ChartBarIcon, path: '/results' },
-    { id: 'documents', label: 'Documents', icon: DocumentTextIcon, path: '/documents' },
-    { id: 'settings', label: 'Settings', icon: CogIcon, path: '/settings' },
+    { id: 'registrations', label: 'Registrations', icon: DocumentTextIcon, path: '/forms' },
   ]
 
   const handleNavigation = (path: string) => {
@@ -57,7 +49,7 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onClose }) => {
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-                <AcademicCapIcon className="w-6 h-6 text-white" />
+                <DocumentTextIcon className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-lg font-bold text-gray-900">JKUSA</h1>
@@ -73,7 +65,7 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onClose }) => {
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {menuItems.map((item) => {
               const Icon = item.icon
-              const isActive = location.pathname === item.path
+              const isActive = location.pathname === item.path || (item.id === 'registrations' && location.pathname.startsWith('/forms'))
               return (
                 <button
                   key={item.id}
