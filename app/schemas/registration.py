@@ -1,6 +1,3 @@
-# ==================== SCHEMAS ====================
-# app/schemas/registration.py
-
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -79,6 +76,13 @@ class FormCreate(BaseModel):
     target_school_ids: Optional[List[int]] = []
     target_years: Optional[List[int]] = []
     fields: List[FormFieldCreate]
+    status: Optional[FormStatus] = FormStatus.DRAFT
+    
+    @validator('status', pre=True)
+    def normalize_status(cls, v):
+        if isinstance(v, str):
+            return v.lower()  # Ensure lowercase
+        return v
     
     @validator('close_date')
     def validate_close_date(cls, v, values):
@@ -95,6 +99,12 @@ class FormUpdate(BaseModel):
     target_school_ids: Optional[List[int]] = None
     target_years: Optional[List[int]] = None
     status: Optional[FormStatus] = None
+    
+    @validator('status', pre=True)
+    def normalize_status(cls, v):
+        if isinstance(v, str):
+            return v.lower()  # Ensure lowercase
+        return v
 
 class FormResponse(BaseModel):
     id: int
@@ -148,7 +158,6 @@ class FieldAnalytics(BaseModel):
     field_label: str
     field_type: str
     total_responses: int
-    # Breakdown is dynamic: {option_value: count} for select/boolean, or simple count for others
     response_breakdown: Dict[str, Any] 
 
 class FormAnalyticsResponse(BaseModel):
@@ -159,11 +168,11 @@ class FormAnalyticsResponse(BaseModel):
     form_id: int
     form_title: str
     total_submissions: int
-    submission_percentage: float # Percentage of target students who submitted
+    submission_percentage: float
     submission_deadline: datetime
     field_analytics: List[FieldAnalytics] 
-    ai_summary: Optional[str] # AI-generated overall summary
-    ai_insights: Optional[str] # AI-generated key insights
+    ai_summary: Optional[str]
+    ai_insights: Optional[str]
     
     class Config:
         from_attributes = True
