@@ -110,7 +110,7 @@ class FormResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# -------------------- Submission Schemas (FIX for ImportError) --------------------
+# -------------------- Submission Schemas --------------------
 class FormSubmissionFieldData(BaseModel):
     """Represents a single field's data within a submission."""
     field_id: int
@@ -121,15 +121,39 @@ class FormSubmissionCreate(BaseModel):
     data: Dict[int, Any] # Dictionary mapping field_id (int) to the submitted value (Any)
 
 class FormSubmissionResponse(BaseModel):
-    """
-    Represents a full form submission retrieved from the database.
-    This is the class that was missing and causing the ImportError.
-    """
+    """Represents a full form submission retrieved from the database."""
     id: int
     form_id: int
     submitted_by: int # ID of the user who submitted the form
     submitted_at: datetime
     data: List[FormSubmissionFieldData] # The actual data submitted
+    
+    class Config:
+        from_attributes = True
+
+# -------------------- Analytics Schemas (NEW FIX) --------------------
+class FieldAnalytics(BaseModel):
+    """Schema for individual field analytics within a form."""
+    field_id: int
+    field_label: str
+    field_type: str
+    total_responses: int
+    # Breakdown is dynamic: {option_value: count} for select/boolean, or simple count for others
+    response_breakdown: Dict[str, Any] 
+
+class FormAnalyticsResponse(BaseModel):
+    """
+    Response schema for the form analytics endpoint.
+    This is the missing class causing the ImportError.
+    """
+    form_id: int
+    form_title: str
+    total_submissions: int
+    submission_percentage: float # Percentage of target students who submitted
+    submission_deadline: datetime
+    field_analytics: List[FieldAnalytics] 
+    ai_summary: Optional[str] # AI-generated overall summary
+    ai_insights: Optional[str] # AI-generated key insights
     
     class Config:
         from_attributes = True
