@@ -1,4 +1,3 @@
-
 # ==================== ADMIN APIS ====================
 # app/routes/admin_registrations.py
 
@@ -18,7 +17,7 @@ from app.models.registration import (
 from app.models.student import School, College
 from app.schemas.registration import (
     FormCreate, FormUpdate, FormResponse, FormField as FormFieldSchema,
-    FormSubmissionResponse, FormAnalyticsResponse, FieldAnalytics
+    FormSubmissionResponse, FormAnalyticsResponse, FieldAnalytics  # These imports will now work
 )
 from app.auth.auth import get_current_admin
 from app.services.gemini_service import generate_form_analytics
@@ -451,10 +450,13 @@ async def get_form_analytics(
     # Calculate field analytics
     field_analytics = []
     for field in db_form.fields:
+        # Note: In the database, submission data is often stored as a dictionary 
+        # where keys are field IDs (often strings).
         responses = [sub.data.get(str(field.id)) for sub in submissions if str(field.id) in sub.data]
         
         response_breakdown = {}
         if field.field_type == "boolean":
+            # Note: Assuming boolean values are stored as True/False (Python booleans)
             response_breakdown = {
                 "true": sum(1 for r in responses if r is True),
                 "false": sum(1 for r in responses if r is False)
@@ -464,8 +466,10 @@ async def get_form_analytics(
             for response in responses:
                 response_breakdown[response] = response_breakdown.get(response, 0) + 1
         else:
+            # For text, number, etc., just show the count
             response_breakdown = {"total_responses": len(responses)}
         
+        # This will now successfully create the FieldAnalytics Pydantic object
         field_analytics.append(FieldAnalytics(
             field_id=field.id,
             field_label=field.label,
@@ -478,6 +482,8 @@ async def get_form_analytics(
     ai_summary = None
     ai_insights = None
     if total_submissions > 0:
+        # Assuming generate_form_analytics is correctly defined in app.services.gemini_service
+        # and returns a tuple (ai_summary: str, ai_insights: str)
         ai_summary, ai_insights = generate_form_analytics(
             form_title=db_form.title,
             fields=db_form.fields,
@@ -485,6 +491,7 @@ async def get_form_analytics(
             field_analytics=field_analytics
         )
     
+    # This will now successfully create the FormAnalyticsResponse Pydantic object
     return FormAnalyticsResponse(
         form_id=form_id,
         form_title=db_form.title,
