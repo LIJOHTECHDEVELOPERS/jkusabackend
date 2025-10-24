@@ -43,6 +43,9 @@ async def create_form(
                     detail="One or more schools not found"
                 )
         
+        # Log the validated status to debug
+        logger.debug(f"Validated status: {form_data.status}")
+        
         # Create form using validated FormCreate data
         db_form = Form(
             title=form_data.title,
@@ -160,6 +163,7 @@ async def update_form(
         
         # Ensure status is a valid FormStatus enum value
         if 'status' in update_data:
+            logger.debug(f"Updating status to: {update_data['status']}")
             update_data['status'] = FormStatus(update_data['status']).value
         
         # Handle target school updates
