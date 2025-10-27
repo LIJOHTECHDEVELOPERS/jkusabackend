@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field, validator
+# app/schemas/registration.py
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -24,11 +25,10 @@ class FormConditionCreate(BaseModel):
     value: str
 
 class FormCondition(FormConditionCreate):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     field_id: int
-    
-    class Config:
-        from_attributes = True
 
 class FormFieldCreate(BaseModel):
     label: str = Field(..., min_length=1, max_length=255)
@@ -39,9 +39,10 @@ class FormFieldCreate(BaseModel):
     position: int = 0
     conditions: Optional[List[FormConditionCreate]] = []
     
-    @validator('options')
-    def validate_options(cls, v, values):
-        if values.get('field_type') == FieldType.SELECT and (not v or len(v) == 0):
+    @field_validator('options')
+    @classmethod
+    def validate_options(cls, v, info):
+        if info.data.get('field_type') == FieldType.SELECT and (not v or len(v) == 0):
             raise ValueError("Select field must have options")
         return v
 
@@ -55,13 +56,12 @@ class FormFieldUpdate(BaseModel):
     conditions: Optional[List[FormConditionCreate]] = None
 
 class FormField(FormFieldCreate):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     form_id: int
     created_at: datetime
     conditions: List[FormCondition] = []
-    
-    class Config:
-        from_attributes = True
 
 # Alias for backwards compatibility
 FormFieldSchema = FormField
@@ -78,15 +78,17 @@ class FormCreate(BaseModel):
     fields: List[FormFieldCreate]
     status: Optional[FormStatus] = FormStatus.DRAFT
     
-    @validator('status', pre=True)
+    @field_validator('status', mode='before')
+    @classmethod
     def normalize_status(cls, v):
         if isinstance(v, str):
-            return v.lower()  # Ensure lowercase
+            return v.lower()
         return v
     
-    @validator('close_date')
-    def validate_close_date(cls, v, values):
-        if 'open_date' in values and v <= values['open_date']:
+    @field_validator('close_date')
+    @classmethod
+    def validate_close_date(cls, v, info):
+        if 'open_date' in info.data and v <= info.data['open_date']:
             raise ValueError("Close date must be after open date")
         return v
 
@@ -100,13 +102,16 @@ class FormUpdate(BaseModel):
     target_years: Optional[List[int]] = None
     status: Optional[FormStatus] = None
     
-    @validator('status', pre=True)
+    @field_validator('status', mode='before')
+    @classmethod
     def normalize_status(cls, v):
         if isinstance(v, str):
-            return v.lower()  # Ensure lowercase
+            return v.lower()
         return v
 
 class FormResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     title: str
     description: Optional[str]
@@ -119,60 +124,58 @@ class FormResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     fields: List[FormField]
-    
-    class Config:
-        from_attributes = True
 
 # -------------------- Submission Schemas --------------------
 class FormSubmissionFieldData(BaseModel):
     """Represents a single field's data within a submission."""
+    model_config = ConfigDict(from_attributes=True)
+    
     field_id: int
-    value: Any # Value can be a string, number, boolean, or list, depending on FieldType
+    value: Any
 
 class FormSubmissionCreate(BaseModel):
     """Represents the data sent by a user to create a new submission."""
-    data: Dict[int, Any] # Dictionary mapping field_id (int) to the submitted value (Any)
+    data: Dict[int, Any]
 
 class FormSubmissionUpdate(BaseModel):
     """Represents data for updating an existing form submission."""
-    data: Dict[int, Any]  # Dictionary mapping field_id to updated values
+    model_config = ConfigDict(from_attributes=True)
     
-    class Config:
-        from_attributes = True
+    data: Dict[int, Any]
 
 class FormSubmissionResponse(BaseModel):
     """Represents a full form submission retrieved from the database."""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     form_id: int
-    submitted_by: int # ID of the user who submitted the form
+    submitted_by: int
     submitted_at: datetime
-    data: List[FormSubmissionFieldData] # The actual data submitted
-    
-    class Config:
-        from_attributes = True
+    data: List[FormSubmissionFieldData]
 
 # -------------------- Analytics Schemas --------------------
 class FieldAnalytics(BaseModel):
     """Schema for individual field analytics within a form."""
+    model_config = ConfigDict(from_attributes=True)
+    
     field_id: int
     field_label: str
     field_type: str
     total_responses: int
-    response_breakdown: Dict[str, Any] 
+    response_breakdown: Dict[str, Any]
 
 class FormAnalyticsResponse(BaseModel):
     """
     Response schema for the form analytics endpoint.
     Contains aggregated analytics data for a form and its submissions.
     """
+    model_config = ConfigDict(from_attributes=True)
+    
     form_id: int
     form_title: str
     total_submissions: int
     submission_percentage: float
     submission_deadline: datetime
-    field_analytics: List[FieldAnalytics] 
-    ai_summary: Optional[str]
-    ai_insights: Optional[str]
-    
-    class Config:
-        from_attributes = True
+    field_analytics: List[FieldAnalytics]
+    ai_summary: Optional[str] = None
+    ai_insights: Optional[str] = None

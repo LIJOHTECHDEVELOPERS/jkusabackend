@@ -1,3 +1,4 @@
+# app/routers/registrations.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -7,10 +8,10 @@ from typing import List
 
 from app.database import get_db
 from app.models.registration import Form, FormField, FormSubmission, FormStatus
-from app.models.student import Student as StudentModel, School  # Fixed typo: 'student' to 'Student'
+from app.models.student import Student as StudentModel, School
 from app.schemas.registration import (
     FormResponse, FormSubmissionCreate, FormSubmissionUpdate, 
-    FormSubmissionResponse, FormFieldSchema
+    FormSubmissionResponse, FormField as FormFieldSchema
 )
 from app.routers.students_sso import get_current_student
 
@@ -38,13 +39,10 @@ async def list_available_forms(
     try:
         current_time = datetime.utcnow()
         
-        # Log enum for debugging
-        logger.debug(f"FormStatus.open.value = '{FormStatus.open.value}'")
-        
         # Query for open forms within date range
         query = db.query(Form).filter(
             and_(
-                Form.status == FormStatus.open.value,  # Fixed: FormStatus.open.value
+                Form.status == FormStatus.open.value,
                 Form.open_date <= current_time,
                 Form.close_date >= current_time
             )
@@ -116,7 +114,7 @@ async def submit_form(
         
         # Check if form is open and within deadline
         current_time = datetime.utcnow()
-        if db_form.status != FormStatus.open.value:  # Fixed: FormStatus.open.value
+        if db_form.status != FormStatus.open.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This form is no longer open for submissions"
@@ -139,8 +137,7 @@ async def submit_form(
         if existing_submission:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="You have already submitted this form. Use the update endpoint to modify your response.",
-                detail_code="ALREADY_SUBMITTED"
+                detail="You have already submitted this form. Use the update endpoint to modify your response."
             )
         
         # Validate required fields
@@ -370,7 +367,7 @@ async def get_form_status(
         
         return {
             "form_id": form_id,
-            "form_status": db_form.status,  # Already a string from SQLEnum(FormStatus)
+            "form_status": db_form.status,
             "submission_status": "submitted" if submission else "not_submitted",
             "is_locked": submission.locked if submission else False,
             "time_remaining_seconds": max(0, time_remaining),
@@ -401,7 +398,7 @@ async def auto_lock_expired_submissions(db: Session):
         closed_forms = db.query(Form).filter(
             and_(
                 Form.close_date <= current_time,
-                Form.status == FormStatus.open.value  # Fixed: FormStatus.open.value
+                Form.status == FormStatus.open.value
             )
         ).all()
         
@@ -418,7 +415,7 @@ async def auto_lock_expired_submissions(db: Session):
                 submission.locked = True
             
             # Close the form
-            form.status = FormStatus.closed.value  # Fixed: FormStatus.closed.value
+            form.status = FormStatus.closed.value
         
         db.commit()
         logger.info(f"Auto-locked {len(closed_forms)} forms and their submissions")
