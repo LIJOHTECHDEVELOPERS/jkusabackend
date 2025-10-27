@@ -29,6 +29,13 @@ async def list_available_forms(
     db: Session = Depends(get_db),
     current_student: StudentModel = Depends(get_current_student)
 ):
+    """
+    List all registration forms available to the student
+    Forms are filtered based on:
+    - Form status (must be OPEN)
+    - Target audience (school/college/year of study)
+    - Current date (between open_date and close_date)
+    """
     logger.debug(f"Student {current_student.email} listing available forms")
     
     try:
@@ -37,20 +44,21 @@ async def list_available_forms(
         # Query for open forms within date range
         query = db.query(Form).filter(
             and_(
-                Form.status == FormStatus.OPEN.value,  # Use .value to ensure string comparison
+                Form.status == FormStatusModel.OPEN.value,  # Use .value for string comparison
                 Form.open_date <= current_time,
                 Form.close_date >= current_time
             )
         )
         
-        logger.debug(f"Querying forms with status: {FormStatus.OPEN.value}")
+        logger.debug(f"Querying forms with status: {FormStatusModel.OPEN.value}")
         forms = query.all()
-        logger.debug(f"Retrieved {len(forms)} forms from database")
+        logger.debug(f"Retrieved {len(forms)} forms from database: {[f.id for f in forms]}")
         
         # Filter by target audience
         eligible_forms = []
         
         for form in forms:
+            logger.debug(f"Checking eligibility for form ID {form.id}, status: {form.status}")
             is_eligible = False
             
             # If targeting all students
@@ -78,69 +86,10 @@ async def list_available_forms(
         return paginated_forms
         
     except Exception as e:
-        logger.error(f"Error listing available forms: {str(e)}", exc_info=True)  # Include stack trace
+        logger.error(f"Error listing available forms: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving available forms: {str(e)}"
-        )
-
-@router.get("/forms/{form_id}", response_model=FormResponse)
-async def get_form_details(
-    form_id: int,
-    db: Session = Depends(get_db),
-    current_student: StudentModel = Depends(get_current_student)
-):
-    """
-    Get detailed information about a specific form
-    Includes all fields with conditional logic info
-    Verifies student has access to this form
-    """
-    logger.debug(f"Student {current_student.email} fetching form ID: {form_id}")
-    
-    try:
-        db_form = db.query(Form).filter(Form.id == form_id).first()
-        if not db_form:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Form not found"
-            )
-        
-        # Verify student has access
-        current_time = datetime.utcnow()
-        if db_form.status != FormStatus.OPEN or db_form.open_date > current_time:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="This form is not currently open"
-            )
-        
-        # Check access eligibility
-        is_eligible = False
-        if db_form.target_all_students:
-            is_eligible = True
-        else:
-            if db_form.assigned_schools:
-                if current_student.school_id in [s.id for s in db_form.assigned_schools]:
-                    if not db_form.target_years or current_student.year_of_study in db_form.target_years:
-                        is_eligible = True
-            elif db_form.target_years and current_student.year_of_study in db_form.target_years:
-                is_eligible = True
-        
-        if not is_eligible:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not eligible to fill this form"
-            )
-        
-        logger.info(f"Form ID {form_id} retrieved for student {current_student.email}")
-        return db_form
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching form details: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving form details"
         )
 
 # ========== FORM SUBMISSION ==========
