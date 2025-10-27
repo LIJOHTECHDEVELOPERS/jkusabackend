@@ -264,7 +264,25 @@ async def publish_form(
             detail="Form not found"
         )
     
-    db_form.status = FormStatus.OPEN.value
+    if db_form.status == FormStatus.open.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Form is already open"
+        )
+    
+    if db_form.open_date > datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Form cannot be published before its open date"
+        )
+    
+    if db_form.close_date < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Form cannot be published after its close date"
+        )
+    
+    db_form.status = FormStatus.open.value
     db.commit()
     db.refresh(db_form)
     
@@ -287,7 +305,7 @@ async def close_form(
             detail="Form not found"
         )
     
-    db_form.status = FormStatus.CLOSED.value
+    db_form.status = FormStatus.closed.value
     
     # Lock all submissions
     submissions = db.query(FormSubmission).filter(FormSubmission.form_id == form_id).all()
