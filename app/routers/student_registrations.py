@@ -29,13 +29,6 @@ async def list_available_forms(
     db: Session = Depends(get_db),
     current_student: StudentModel = Depends(get_current_student)
 ):
-    """
-    List all registration forms available to the student
-    Forms are filtered based on:
-    - Form status (must be OPEN)
-    - Target audience (school/college/year of study)
-    - Current date (between open_date and close_date)
-    """
     logger.debug(f"Student {current_student.email} listing available forms")
     
     try:
@@ -44,17 +37,20 @@ async def list_available_forms(
         # Query for open forms within date range
         query = db.query(Form).filter(
             and_(
-                Form.status == FormStatus.OPEN,
+                Form.status == FormStatus.OPEN.value,  # Use .value to ensure string comparison
                 Form.open_date <= current_time,
                 Form.close_date >= current_time
             )
         )
         
+        logger.debug(f"Querying forms with status: {FormStatus.OPEN.value}")
+        forms = query.all()
+        logger.debug(f"Retrieved {len(forms)} forms from database")
+        
         # Filter by target audience
-        # Forms can target: all students, specific schools, specific years
         eligible_forms = []
         
-        for form in query.all():
+        for form in forms:
             is_eligible = False
             
             # If targeting all students
@@ -82,10 +78,10 @@ async def list_available_forms(
         return paginated_forms
         
     except Exception as e:
-        logger.error(f"Error listing available forms: {str(e)}")
+        logger.error(f"Error listing available forms: {str(e)}", exc_info=True)  # Include stack trace
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving available forms"
+            detail=f"Error retrieving available forms: {str(e)}"
         )
 
 @router.get("/forms/{form_id}", response_model=FormResponse)

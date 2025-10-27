@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext"; // Import useAuth like Dashboard
 
 const API_BASE_URL = "https://backend.jkusa.org";
 
@@ -53,6 +55,8 @@ interface FormStatus {
 }
 
 const StudentFormsPage = () => {
+  const { user, loading, token } = useAuth(); // Use useAuth like Dashboard
+  const navigate = useNavigate();
   const [view, setView] = useState<"list" | "detail">("list");
   const [forms, setForms] = useState<Form[]>([]);
   const [selectedForm, setSelectedForm] = useState<Form | null>(null);
@@ -65,18 +69,39 @@ const StudentFormsPage = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Redirect to signin if user is not authenticated (like Dashboard)
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/signin");
+    }
+  }, [user, loading, navigate]);
+
   const makeAuthenticatedRequest = async (
     url: string,
     options?: RequestInit
   ) => {
     try {
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...options?.headers,
+      };
+
+      // Add Authorization header if token exists (for /registrations endpoints)
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch(url, {
         ...options,
-        headers: {
-          "Content-Type": "application/json",
-          ...options?.headers,
-        },
+        headers,
+        credentials: "include", // Include cookies like Dashboard might rely on
       });
+
+      if (response.status === 401) {
+        navigate("/signin"); // Redirect to signin like Dashboard
+        throw new Error("Unauthorized: Please log in again");
+      }
+
       return response;
     } catch (error) {
       throw error;
@@ -97,7 +122,7 @@ const StudentFormsPage = () => {
 
   // Fetch forms list
   useEffect(() => {
-    if (view !== "list") return;
+    if (view !== "list" || !user) return;
     const fetchForms = async () => {
       setIsLoading(true);
       try {
@@ -125,7 +150,7 @@ const StudentFormsPage = () => {
       }
     };
     fetchForms();
-  }, [view]);
+  }, [view, user, token]); // Include user and token as dependencies
 
   const handleSelectForm = async (formId: number) => {
     setIsLoading(true);
@@ -236,7 +261,7 @@ const StudentFormsPage = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [selectedForm, formData, submission]);
+  }, [selectedForm, formData, submission, token]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -416,9 +441,7 @@ const StudentFormsPage = () => {
     return (
       <div
         key={field.id}
-        className={
-          field.field_type === "boolean" ? "" : "space-y-2"
-        }
+        className={field.field_type === "boolean" ? "" : "space-y-2"}
       >
         {field.field_type !== "boolean" && (
           <label
@@ -439,6 +462,18 @@ const StudentFormsPage = () => {
       </div>
     );
   };
+
+  // Show loading screen while checking authentication (like Dashboard)
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600">Loading forms...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Detail View
   if (view === "detail" && selectedForm) {
