@@ -8,7 +8,7 @@ from typing import List
 
 from app.database import get_db
 from app.models.registration import Form, FormField, FormSubmission, FormStatus
-from app.models.student import Student as StudentModel, School
+from app.models.student import student as StudentModel, School
 from app.schemas.registration import (
     FormResponse, FormSubmissionCreate, FormSubmissionUpdate, 
     FormSubmissionResponse, FormField as FormFieldSchema
