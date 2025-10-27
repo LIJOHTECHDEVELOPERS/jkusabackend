@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext"; // Import useAuth like Dashboard
+import { useAuth } from "../context/AuthContext";
 
 const API_BASE_URL = "https://backend.jkusa.org";
 
@@ -55,7 +55,7 @@ interface FormStatus {
 }
 
 const StudentFormsPage = () => {
-  const { user, loading, token } = useAuth(); // Use useAuth like Dashboard
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [view, setView] = useState<"list" | "detail">("list");
   const [forms, setForms] = useState<Form[]>([]);
@@ -69,7 +69,17 @@ const StudentFormsPage = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Redirect to signin if user is not authenticated (like Dashboard)
+  // Get token from sessionStorage (same way AuthContext stores it)
+  const getToken = () => {
+    try {
+      return sessionStorage.getItem('auth_token');
+    } catch (e) {
+      console.error('Failed to retrieve token:', e);
+      return null;
+    }
+  };
+
+  // Redirect to signin if user is not authenticated
   useEffect(() => {
     if (!loading && !user) {
       navigate("/signin");
@@ -81,12 +91,13 @@ const StudentFormsPage = () => {
     options?: RequestInit
   ) => {
     try {
+      const token = getToken();
       const headers: HeadersInit = {
         "Content-Type": "application/json",
         ...options?.headers,
       };
 
-      // Add Authorization header if token exists (for /registrations endpoints)
+      // Add Authorization header if token exists
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
       }
@@ -94,11 +105,12 @@ const StudentFormsPage = () => {
       const response = await fetch(url, {
         ...options,
         headers,
-        credentials: "include", // Include cookies like Dashboard might rely on
+        credentials: "include",
       });
 
       if (response.status === 401) {
-        navigate("/signin"); // Redirect to signin like Dashboard
+        console.error('❌ Unauthorized (401) - redirecting to signin');
+        navigate("/signin");
         throw new Error("Unauthorized: Please log in again");
       }
 
@@ -150,7 +162,7 @@ const StudentFormsPage = () => {
       }
     };
     fetchForms();
-  }, [view, user, token]); // Include user and token as dependencies
+  }, [view, user]);
 
   const handleSelectForm = async (formId: number) => {
     setIsLoading(true);
@@ -171,25 +183,30 @@ const StudentFormsPage = () => {
       if (formResponse.ok) {
         const form = await formResponse.json();
         setSelectedForm(form);
-        setFormData(
-          form.fields.reduce(
-            (acc: any, field: Field) => ({
-              ...acc,
-              [field.id]: field.default_value || "",
-            }),
-            {}
-          )
+        
+        // Initialize form data with default values
+        const initialData = form.fields.reduce(
+          (acc: any, field: Field) => ({
+            ...acc,
+            [field.id]: field.default_value || "",
+          }),
+          {}
         );
+        
+        // If submission exists, merge with submission data
+        if (submissionResponse && submissionResponse.ok) {
+          const submissionData = await submissionResponse.json();
+          setSubmission(submissionData);
+          setFormData({ ...initialData, ...submissionData.data });
+        } else {
+          setFormData(initialData);
+        }
       } else {
         throw new Error("Failed to load form");
       }
 
       if (statusResponse.ok) {
         setFormStatus(await statusResponse.json());
-      }
-
-      if (submissionResponse && submissionResponse.ok) {
-        setSubmission(await submissionResponse.json());
       }
 
       setView("detail");
@@ -261,7 +278,7 @@ const StudentFormsPage = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [selectedForm, formData, submission, token]);
+  }, [selectedForm, formData, submission]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -463,7 +480,7 @@ const StudentFormsPage = () => {
     );
   };
 
-  // Show loading screen while checking authentication (like Dashboard)
+  // Show loading screen while checking authentication
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">

@@ -423,3 +423,69 @@ async def auto_lock_expired_submissions(db: Session):
     except Exception as e:
         db.rollback()
         logger.error(f"Error auto-locking submissions: {str(e)}", exc_info=True)
+
+# Add this endpoint to your registrations.py file
+# Place it after the list_available_forms endpoint and before the submit_form endpoint
+
+@router.get("/forms/{form_id}", response_model=FormResponse)
+async def get_form_details(
+    form_id: int,
+    db: Session = Depends(get_db),
+    current_student: StudentModel = Depends(get_current_student)
+):
+    """
+    Get detailed information about a specific form including all fields
+    Students can only access forms that are available to them
+    """
+    logger.debug(f"Student {current_student.email} fetching form ID: {form_id}")
+    
+    try:
+        db_form = db.query(Form).filter(Form.id == form_id).first()
+        if not db_form:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Form not found"
+            )
+        
+        # Check if student is eligible to view this form
+        current_time = datetime.utcnow()
+        is_eligible = False
+        
+        # If targeting all students
+        if db_form.target_all_students:
+            is_eligible = True
+        else:
+            # Check if student's school is in assigned schools
+            if db_form.assigned_schools:
+                if current_student.school_id in [s.id for s in db_form.assigned_schools]:
+                    # Check if year of study matches
+                    if not db_form.target_years or current_student.year_of_study in db_form.target_years:
+                        is_eligible = True
+            # Check if only year filtering is applied
+            elif db_form.target_years and current_student.year_of_study in db_form.target_years:
+                is_eligible = True
+        
+        if not is_eligible:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not eligible to access this form"
+            )
+        
+        # Check if form is within the available date range
+        if current_time < db_form.open_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This form is not yet open"
+            )
+        
+        logger.info(f"Student {current_student.email} accessed form ID {form_id}")
+        return db_form
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching form details: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving form details"
+        )
