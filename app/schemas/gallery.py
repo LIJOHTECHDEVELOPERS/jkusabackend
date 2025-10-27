@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from app.models.gallery import GalleryCategory
@@ -21,13 +21,12 @@ class GalleryUpdate(BaseModel):
     display_order: Optional[int] = Field(None, ge=0)
 
 class Gallery(GalleryBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     image_url: str
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 class GalleryReorderRequest(BaseModel):
     gallery_items: List[dict]  # [{"id": 1, "display_order": 0}, ...]

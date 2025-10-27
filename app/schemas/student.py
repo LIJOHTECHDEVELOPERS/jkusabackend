@@ -2,68 +2,28 @@
 Pydantic Schemas for Student Authentication - Pydantic V2 Compatible
 File: app/schemas/student.py
 """
-
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 import re
 
-
 class CollegeResponse(BaseModel):
     """Schema for college response"""
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     name: str
-
 
 class SchoolResponse(BaseModel):
     """Schema for school response"""
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     name: str
     college_id: int
 
-
 class StudentCreate(BaseModel):
     """Schema for student registration"""
-    first_name: str = Field(..., min_length=2, max_length=50)
-    last_name: str = Field(..., min_length=2, max_length=50)
-    email: EmailStr
-    phone_number: str = Field(..., min_length=10, max_length=15)
-    registration_number: str = Field(..., min_length=5, max_length=20)
-    college_id: int = Field(..., gt=0)
-    school_id: int = Field(..., gt=0)
-    course: str = Field(..., min_length=3, max_length=100)
-    year_of_study: int = Field(..., ge=1, le=6)
-    password: str = Field(..., min_length=8, max_length=128)
-    
-    @field_validator('first_name', 'last_name')
-    @classmethod
-    def validate_name(cls, v):
-        if not re.match(r"^[a-zA-Z\s'-]+$", v):
-            raise ValueError('Name must contain only letters, spaces, hyphens, and apostrophes')
-        return v.strip()
-    
-    @field_validator('phone_number')
-    @classmethod
-    def validate_phone(cls, v):
-        # Remove spaces and special characters
-        phone = re.sub(r'[\s\-\(\)]', '', v)
-        if not re.match(r'^\+?[0-9]{10,15}$', phone):
-            raise ValueError('Invalid phone number format')
-        return phone
-    
-    @field_validator('registration_number')
-    @classmethod
-    def validate_reg_number(cls, v):
-        # Basic validation - adjust based on your institution's format
-        v = v.strip().upper()
-        if not re.match(r'^[A-Z0-9\-/]+$', v):
-            raise ValueError('Registration number contains invalid characters')
-        return v
-    
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -81,12 +41,47 @@ class StudentCreate(BaseModel):
         }
     )
 
+    first_name: str = Field(..., min_length=2, max_length=50)
+    last_name: str = Field(..., min_length=2, max_length=50)
+    email: EmailStr
+    phone_number: str = Field(..., min_length=10, max_length=15)
+    registration_number: str = Field(..., min_length=5, max_length=20)
+    college_id: int = Field(..., gt=0)
+    school_id: int = Field(..., gt=0)
+    course: str = Field(..., min_length=3, max_length=100)
+    year_of_study: int = Field(..., ge=1, le=6)
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator('first_name', 'last_name')
+    @classmethod
+    def validate_name(cls, v):
+        if not re.match(r"^[a-zA-Z\s'-]+$", v):
+            raise ValueError('Name must contain only letters, spaces, hyphens, and apostrophes')
+        return v.strip()
+
+    @field_validator('phone_number')
+    @classmethod
+    def validate_phone(cls, v):
+        # Remove spaces and special characters
+        phone = re.sub(r'[\s\-\(\)]', '', v)
+        if not re.match(r'^\+?[0-9]{10,15}$', phone):
+            raise ValueError('Invalid phone number format')
+        return phone
+
+    @field_validator('registration_number')
+    @classmethod
+    def validate_reg_number(cls, v):
+        # Basic validation - adjust based on your institution's format
+        v = v.strip().upper()
+        if not re.match(r'^[A-Z0-9\-/]+$', v):
+            raise ValueError('Registration number contains invalid characters')
+        return v
 
 class StudentLogin(BaseModel):
     """Schema for student login"""
     login_id: str = Field(..., description="Email or Registration Number")
     password: str = Field(..., min_length=1)
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -95,7 +90,6 @@ class StudentLogin(BaseModel):
             }
         }
     )
-
 
 class StudentResponse(BaseModel):
     """Schema for student response with college and school details"""
@@ -129,7 +123,7 @@ class StudentResponse(BaseModel):
             }
         }
     )
-    
+
     id: int
     first_name: str
     last_name: str
@@ -144,17 +138,15 @@ class StudentResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime] = None
     email_verified_at: Optional[datetime] = None
-    
+
     # Include college and school relationship data
     college: Optional[CollegeResponse] = None
     school: Optional[SchoolResponse] = None
-
 
 class TokenData(BaseModel):
     """Schema for JWT token data"""
     student_id: int
     email: str
-
 
 class PasswordResetRequest(BaseModel):
     """Schema for password reset request"""
@@ -165,9 +157,8 @@ class PasswordResetRequest(BaseModel):
             }
         }
     )
-    
-    email: EmailStr
 
+    email: EmailStr
 
 class PasswordResetConfirm(BaseModel):
     """Schema for password reset confirmation"""
@@ -180,11 +171,10 @@ class PasswordResetConfirm(BaseModel):
             }
         }
     )
-    
+
     token: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=8, max_length=128)
     confirm_password: str = Field(..., min_length=8, max_length=128)
-
 
 class PasswordChange(BaseModel):
     """Schema for password change"""
@@ -197,11 +187,10 @@ class PasswordChange(BaseModel):
             }
         }
     )
-    
+
     old_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=8, max_length=128)
     confirm_password: str = Field(..., min_length=8, max_length=128)
-
 
 # Backwards compatibility aliases (lowercase versions)
 studentCreate = StudentCreate

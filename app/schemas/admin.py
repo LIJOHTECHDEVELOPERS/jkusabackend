@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Dict, List
 
 class AdminCreate(BaseModel):
@@ -21,15 +21,16 @@ class AdminUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class AdminRoleInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     name: str
     description: Optional[str] = None
     permissions: Optional[List[str]] = None  # Changed to List[str] to match frontend expectation
-    
-    class Config:
-        from_attributes = True
 
 class Admin(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     username: str
     first_name: str
@@ -40,9 +41,6 @@ class Admin(BaseModel):
     role: Optional[AdminRoleInfo] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
 
 class Token(BaseModel):
     access_token: str

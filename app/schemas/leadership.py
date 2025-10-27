@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from app.models.leadership import CampusType, LeadershipCategory
@@ -14,7 +14,8 @@ class LeadershipBase(BaseModel):
     hall_name: Optional[str] = Field(None, max_length=255)
     display_order: Optional[int] = Field(0, ge=0)
     
-    @validator('year_of_service')
+    @field_validator('year_of_service')
+    @classmethod
     def validate_year_format(cls, v):
         # Validate year format like "2024-2025" or "2024"
         if not v.replace('-', '').replace(' ', '').isdigit():
@@ -26,16 +27,19 @@ class LeadershipBase(BaseModel):
         return v
 
 class LeadershipCreate(LeadershipBase):
-    # Override validation for create - require school/hall names for specific categories
-    @validator('school_name')
-    def validate_school_name_create(cls, v, values):
-        if 'category' in values and values['category'] == LeadershipCategory.SCHOOL_REP and not v:
+    """Override validation for create - require school/hall names for specific categories"""
+    
+    @field_validator('school_name')
+    @classmethod
+    def validate_school_name_create(cls, v, info):
+        if 'category' in info.data and info.data['category'] == LeadershipCategory.SCHOOL_REP and not v:
             raise ValueError('School name is required for school representatives')
         return v
     
-    @validator('hall_name')
-    def validate_hall_name_create(cls, v, values):
-        if 'category' in values and values['category'] in [
+    @field_validator('hall_name')
+    @classmethod
+    def validate_hall_name_create(cls, v, info):
+        if 'category' in info.data and info.data['category'] in [
             LeadershipCategory.HALL_REP,
             LeadershipCategory.KAREN_HALL_REP
         ] and not v:
@@ -53,7 +57,8 @@ class LeadershipUpdate(BaseModel):
     hall_name: Optional[str] = Field(None, max_length=255)
     display_order: Optional[int] = Field(None, ge=0)
     
-    @validator('year_of_service')
+    @field_validator('year_of_service')
+    @classmethod
     def validate_year_format(cls, v):
         if v is not None:
             if not v.replace('-', '').replace(' ', '').isdigit():
@@ -65,8 +70,9 @@ class LeadershipUpdate(BaseModel):
         return v
 
 class Leadership(BaseModel):
-    # Response model - NO validation requirements for school/hall names
-    # This allows existing records with None values to be returned
+    """Response model - NO validation requirements for school/hall names"""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     name: str
     bio: Optional[str] = None
@@ -80,14 +86,12 @@ class Leadership(BaseModel):
     display_order: int
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 class LeadershipReorderRequest(BaseModel):
     leadership_items: List[dict] = Field(..., description="List of leadership items with id and new display_order")
     
-    @validator('leadership_items')
+    @field_validator('leadership_items')
+    @classmethod
     def validate_leadership_items(cls, v):
         if not v:
             raise ValueError('Leadership items list cannot be empty')
@@ -102,17 +106,22 @@ class LeadershipReorderRequest(BaseModel):
 
 # Response models for different organizational views
 class CampusLeadershipResponse(BaseModel):
+    """Response for campus-specific leadership view"""
     campus: CampusType
     categories: dict  # Will contain categories with their leaders
-    
+
 class OrganizationalStructureResponse(BaseModel):
+    """Response for complete organizational structure"""
     main_campus: dict
     karen_campus: dict
     cbd_campus: dict
     nakuru_campus: dict
     mombasa_campus: dict
-    
+
 class LeadershipSummary(BaseModel):
+    """Summary view of leadership"""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     name: str
     position_title: str
@@ -121,6 +130,3 @@ class LeadershipSummary(BaseModel):
     year_of_service: str
     profile_image_url: Optional[str] = None
     display_order: int
-    
-    class Config:
-        from_attributes = True

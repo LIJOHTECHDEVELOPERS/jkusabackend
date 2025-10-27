@@ -1,15 +1,14 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
 class PublisherInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     first_name: str
     last_name: str
     username: str
-    
-    class Config:
-        from_attributes = True
 
 class NewsBase(BaseModel):
     title: str = Field(..., min_length=10, max_length=255)
@@ -33,10 +32,9 @@ class NewsUpdate(BaseModel):
     # slug is auto-updated when title changes
 
 class News(NewsBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     slug: str  # Required in response
     publisher_id: int
     publisher: PublisherInfo
-    
-    class Config:
-        from_attributes = True

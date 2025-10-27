@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -11,10 +11,9 @@ class AnnouncementCreate(AnnouncementBase):
     pass
 
 class Announcement(AnnouncementBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     admin_id: int
     announced_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        orm_mode = True

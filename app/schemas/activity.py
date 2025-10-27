@@ -1,8 +1,10 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
 class Admin(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     first_name: str
     last_name: str
@@ -13,23 +15,19 @@ class Admin(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
-
 class Activity(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     title: str = Field(..., min_length=10, max_length=255)
     description: str = Field(..., min_length=50)
     start_datetime: datetime
-    end_datetime: Optional[datetime]
+    end_datetime: Optional[datetime] = None
     location: Optional[str] = Field(None, max_length=255)
-    featured_image_url: Optional[str]
+    featured_image_url: Optional[str] = None
     published_at: datetime
     publisher_id: int
-    publisher: Optional[Admin]
-
-    class Config:
-        orm_mode = True
+    publisher: Optional[Admin] = None
 
 class ActivityListResponse(BaseModel):
     items: List[Activity]
@@ -39,13 +37,13 @@ class ActivityCreate(BaseModel):
     title: str = Field(..., min_length=10, max_length=255)
     description: str = Field(..., min_length=50)
     start_datetime: str
-    end_datetime: Optional[str]
+    end_datetime: Optional[str] = None
     location: Optional[str] = Field(None, max_length=255)
 
 class ActivityUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=10, max_length=255)
     description: Optional[str] = Field(None, min_length=50)
-    start_datetime: Optional[str]
-    end_datetime: Optional[str]
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
     location: Optional[str] = Field(None, max_length=255)
-    remove_image: Optional[str]
+    remove_image: Optional[str] = None
