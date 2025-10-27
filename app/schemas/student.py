@@ -1,203 +1,181 @@
-"""
-Pydantic Schemas for Student Authentication
-File: app/schemas/student.py
-"""
-
-from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
-from typing import Optional
+# app/schemas/registration.py
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import List, Optional, Dict, Any
 from datetime import datetime
-import re
+from enum import Enum
 
+class FieldType(str, Enum):
+    TEXT = "text"
+    BOOLEAN = "boolean"
+    NUMBER = "number"
+    SELECT = "select"
+    DATE = "date"
+    TEXTAREA = "textarea"
+    EMAIL = "email"
 
-class CollegeResponse(BaseModel):
-    """Schema for college response"""
-    id: int
-    name: str
-    
+class FormStatus(str, Enum):
+    DRAFT = "draft"
+    OPEN = "open"
+    CLOSED = "closed"
+
+# -------------------- Field Schemas --------------------
+class FormConditionCreate(BaseModel):
+    depends_on_field_id: int
+    operator: str  # "equals", "not_equals", "contains"
+    value: str
+
+class FormCondition(FormConditionCreate):
     model_config = ConfigDict(from_attributes=True)
-
-
-class SchoolResponse(BaseModel):
-    """Schema for school response"""
+    
     id: int
-    name: str
-    college_id: int
+    field_id: int
+
+class FormFieldCreate(BaseModel):
+    label: str = Field(..., min_length=1, max_length=255)
+    field_type: FieldType
+    required: bool = False
+    options: Optional[List[str]] = None
+    default_value: Optional[str] = None
+    position: int = 0
+    conditions: Optional[List[FormConditionCreate]] = []
     
+    @field_validator('options')
+    @classmethod
+    def validate_options(cls, v, info):
+        if info.data.get('field_type') == FieldType.SELECT and (not v or len(v) == 0):
+            raise ValueError("Select field must have options")
+        return v
+
+class FormFieldUpdate(BaseModel):
+    label: Optional[str] = None
+    field_type: Optional[FieldType] = None
+    required: Optional[bool] = None
+    options: Optional[List[str]] = None
+    default_value: Optional[str] = None
+    position: Optional[int] = None
+    conditions: Optional[List[FormConditionCreate]] = None
+
+class FormField(FormFieldCreate):
     model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    form_id: int
+    created_at: datetime
+    conditions: List[FormCondition] = []
 
+# Alias for backwards compatibility
+FormFieldSchema = FormField
 
-class studentCreate(BaseModel):
-    """Schema for student registration"""
-    first_name: str = Field(..., min_length=2, max_length=50)
-    last_name: str = Field(..., min_length=2, max_length=50)
-    email: EmailStr
-    phone_number: str = Field(..., min_length=10, max_length=15)
-    registration_number: str = Field(..., min_length=5, max_length=20)
-    college_id: int = Field(..., gt=0)
-    school_id: int = Field(..., gt=0)
-    course: str = Field(..., min_length=3, max_length=100)
-    year_of_study: int = Field(..., ge=1, le=6)
-    password: str = Field(..., min_length=8, max_length=128)
+# -------------------- Form Schemas --------------------
+class FormCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    open_date: datetime
+    close_date: datetime
+    target_all_students: bool = False
+    target_school_ids: Optional[List[int]] = []
+    target_years: Optional[List[int]] = []
+    fields: List[FormFieldCreate]
+    status: Optional[FormStatus] = FormStatus.DRAFT
     
-    @field_validator('first_name', 'last_name')
+    @field_validator('status', mode='before')
     @classmethod
-    def validate_name(cls, v):
-        if not re.match(r"^[a-zA-Z\s'-]+$", v):
-            raise ValueError('Name must contain only letters, spaces, hyphens, and apostrophes')
-        return v.strip()
-    
-    @field_validator('phone_number')
-    @classmethod
-    def validate_phone(cls, v):
-        # Remove spaces and special characters
-        phone = re.sub(r'[\s\-\(\)]', '', v)
-        if not re.match(r'^\+?[0-9]{10,15}$', phone):
-            raise ValueError('Invalid phone number format')
-        return phone
-    
-    @field_validator('registration_number')
-    @classmethod
-    def validate_reg_number(cls, v):
-        # Basic validation - adjust based on your institution's format
-        v = v.strip().upper()
-        if not re.match(r'^[A-Z0-9\-/]+$', v):
-            raise ValueError('Registration number contains invalid characters')
+    def normalize_status(cls, v):
+        if isinstance(v, str):
+            return v.lower()
         return v
     
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "first_name": "John",
-                "last_name": "Doe",
-                "email": "john.doe@students.jkuat.ac.ke",
-                "phone_number": "+254712345678",
-                "registration_number": "SCT211-0001/2021",
-                "college_id": 1,
-                "school_id": 1,
-                "course": "Computer Science",
-                "year_of_study": 3,
-                "password": "SecurePass123!"
-            }
-        }
-    )
+    @field_validator('close_date')
+    @classmethod
+    def validate_close_date(cls, v, info):
+        if 'open_date' in info.data and v <= info.data['open_date']:
+            raise ValueError("Close date must be after open date")
+        return v
 
-
-class studentLogin(BaseModel):
-    """Schema for student login"""
-    login_id: str = Field(..., description="Email or Registration Number")
-    password: str = Field(..., min_length=1)
+class FormUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    open_date: Optional[datetime] = None
+    close_date: Optional[datetime] = None
+    target_all_students: Optional[bool] = None
+    target_school_ids: Optional[List[int]] = None
+    target_years: Optional[List[int]] = None
+    status: Optional[FormStatus] = None
     
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "login_id": "john.doe@students.jkuat.ac.ke",
-                "password": "SecurePass123!"
-            }
-        }
-    )
+    @field_validator('status', mode='before')
+    @classmethod
+    def normalize_status(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
-
-class studentResponse(BaseModel):
-    """Schema for student response with college and school details"""
+class FormResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
-    first_name: str
-    last_name: str
-    email: str
-    phone_number: str
-    registration_number: str
-    college_id: int
-    school_id: int
-    course: str
-    year_of_study: int
-    is_active: bool
+    title: str
+    description: Optional[str]
+    created_by: int
+    open_date: datetime
+    close_date: datetime
+    status: FormStatus
+    target_all_students: bool
+    target_years: List[int]
     created_at: datetime
-    last_login: Optional[datetime] = None
-    email_verified_at: Optional[datetime] = None
+    updated_at: datetime
+    fields: List[FormField]
+
+# -------------------- Submission Schemas --------------------
+class FormSubmissionFieldData(BaseModel):
+    """Represents a single field's data within a submission."""
+    model_config = ConfigDict(from_attributes=True)
     
-    # Include college and school relationship data
-    college: Optional[CollegeResponse] = None
-    school: Optional[SchoolResponse] = None
+    field_id: int
+    value: Any
+
+class FormSubmissionCreate(BaseModel):
+    """Represents the data sent by a user to create a new submission."""
+    data: Dict[int, Any]
+
+class FormSubmissionUpdate(BaseModel):
+    """Represents data for updating an existing form submission."""
+    model_config = ConfigDict(from_attributes=True)
     
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
-            "example": {
-                "id": 1,
-                "first_name": "John",
-                "last_name": "Doe",
-                "email": "john.doe@students.jkuat.ac.ke",
-                "phone_number": "+254712345678",
-                "registration_number": "SCT211-0001/2021",
-                "college_id": 1,
-                "school_id": 1,
-                "course": "Computer Science",
-                "year_of_study": 3,
-                "is_active": True,
-                "created_at": "2024-01-15T10:30:00",
-                "last_login": "2024-01-20T14:45:00",
-                "email_verified_at": "2024-01-15T11:00:00",
-                "college": {
-                    "id": 1,
-                    "name": "COPAS"
-                },
-                "school": {
-                    "id": 1,
-                    "name": "School of Computing and Information Technology",
-                    "college_id": 1
-                }
-            }
-        }
-    )
+    data: Dict[int, Any]
 
-
-class TokenData(BaseModel):
-    """Schema for JWT token data"""
-    student_id: int
-    email: str
-
-
-class PasswordResetRequest(BaseModel):
-    """Schema for password reset request"""
-    email: EmailStr
+class FormSubmissionResponse(BaseModel):
+    """Represents a full form submission retrieved from the database."""
+    model_config = ConfigDict(from_attributes=True)
     
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "email": "john.doe@students.jkuat.ac.ke"
-            }
-        }
-    )
+    id: int
+    form_id: int
+    submitted_by: int
+    submitted_at: datetime
+    data: List[FormSubmissionFieldData]
 
-
-class PasswordResetConfirm(BaseModel):
-    """Schema for password reset confirmation"""
-    token: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8, max_length=128)
-    confirm_password: str = Field(..., min_length=8, max_length=128)
+# -------------------- Analytics Schemas --------------------
+class FieldAnalytics(BaseModel):
+    """Schema for individual field analytics within a form."""
+    model_config = ConfigDict(from_attributes=True)
     
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "token": "abc123-def456-ghi789",
-                "new_password": "NewSecurePass123!",
-                "confirm_password": "NewSecurePass123!"
-            }
-        }
-    )
+    field_id: int
+    field_label: str
+    field_type: str
+    total_responses: int
+    response_breakdown: Dict[str, Any]
 
-
-class PasswordChange(BaseModel):
-    """Schema for password change"""
-    old_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8, max_length=128)
-    confirm_password: str = Field(..., min_length=8, max_length=128)
+class FormAnalyticsResponse(BaseModel):
+    """
+    Response schema for the form analytics endpoint.
+    Contains aggregated analytics data for a form and its submissions.
+    """
+    model_config = ConfigDict(from_attributes=True)
     
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "old_password": "OldPassword123!",
-                "new_password": "NewSecurePass123!",
-                "confirm_password": "NewSecurePass123!"
-            }
-        }
-    )
+    form_id: int
+    form_title: str
+    total_submissions: int
+    submission_percentage: float
+    submission_deadline: datetime
+    field_analytics: List[FieldAnalytics]
+    ai_summary: Optional[str] = None
+    ai_insights: Optional[str] = None
