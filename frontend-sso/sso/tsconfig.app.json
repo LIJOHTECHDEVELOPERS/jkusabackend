@@ -5,7 +5,7 @@
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"], // Added "node" for Node.js type definitions
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -20,9 +20,18 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* Additional settings for module resolution */
+    "baseUrl": "src", // Set baseUrl to src for @/ imports
+    "paths": {
+      "@/*": ["*"] // Alias for src directory
+    },
+    "esModuleInterop": true, // Ensure compatibility with CommonJS modules
+    "allowSyntheticDefaultImports": true, // Allow default imports from modules with no default export
+    "resolveJsonModule": true // Support JSON module imports if needed
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"] // Explicitly exclude node_modules and dist
 }

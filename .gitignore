@@ -2,3 +2,4 @@
 # Python temporary/compiled files
 *.pyc
 __pycache__/
+*.pyc

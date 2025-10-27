@@ -8,6 +8,7 @@ import ForgotPassword from './components/ForgotPassword'
 import ResetPasswordConfirm from './components/ResetPasswordConfirm'
 import VerifyEmail from './components/VerifyEmail'
 import Dashboard from './pages/Dashboard'
+import StudentFormsPage from './pages/StudentsFormsPage'
 
 const App: React.FC = () => {
   return (
@@ -29,18 +30,22 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } 
         />
-        
-        {/* Add more protected routes here as needed */}
-        {/* Example:
         <Route 
-          path="/profile" 
+          path="/forms" 
           element={
             <ProtectedRoute>
-              <Profile />
+              <StudentFormsPage />
             </ProtectedRoute>
           } 
         />
-        */}
+        <Route 
+          path="/forms/:formId" 
+          element={
+            <ProtectedRoute>
+              <StudentFormsPage />
+            </ProtectedRoute>
+          } 
+        />
         
         {/* Default Route - redirects to dashboard (will auto-redirect to signin if not authenticated) */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

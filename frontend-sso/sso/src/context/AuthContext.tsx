@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import axios, { AxiosInstance } from 'axios'
+import axios, { type AxiosInstance } from 'axios'
 
 const API_BASE_URL = 'https://backend.jkusa.org/students/auth'
 

@@ -1,27 +1,22 @@
-import { FC, InputHTMLAttributes } from 'react'
+import * as React from "react"
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string
-  error?: string
-  icon?: React.ComponentType<{ className?: string }>
-}
+import { cn } from "@/lib/utils"
 
-const Input: FC<InputProps> = ({ label, error, icon: Icon, className = '', ...props }) => (
-  <div className="mb-4">
-    {label && <label className="block text-sm font-medium text-gray-900 mb-2">{label}</label>}
-    <div className="relative">
-      {Icon && (
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-          <Icon className="w-5 h-5" />
-        </div>
-      )}
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => {
+    return (
       <input
-        className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white text-black placeholder-gray-400 ${error ? 'border-red-500' : 'border-gray-300'} ${className}`}
+        type={type}
+        className={cn(
+          "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          className
+        )}
+        ref={ref}
         {...props}
       />
-    </div>
-    {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-  </div>
+    )
+  }
 )
+Input.displayName = "Input"
 
-export default Input
+export { Input }
