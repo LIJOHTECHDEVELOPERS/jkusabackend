@@ -10,7 +10,19 @@ interface Field {
   position: number;
   default_value?: string;
   options?: string[];
-  conditions: Condition[];
+  description?: string;
+  placeholder?: string;
+  help_text?: string;
+  min_value?: number;
+  max_value?: number;
+  min_length?: number;
+  max_length?: number;
+  file_upload_config?: {
+    allowed_types?: string[];
+    max_size?: number;
+    multiple?: boolean;
+  };
+  conditions?: Condition[];
 }
 
 interface Condition {
@@ -58,6 +70,7 @@ const StudentFormsPage = () => {
   const [selectedForm, setSelectedForm] = useState<Form | null>(null);
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [fileData, setFileData] = useState<Record<string, File[]>>({});
   const [formStatus, setFormStatus] = useState<FormStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -67,7 +80,6 @@ const StudentFormsPage = () => {
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [isAuthenticated, setIsAuthenticated] = useState(true);
 
-  // Get token from sessionStorage
   const getToken = () => {
     try {
       return sessionStorage.getItem('auth_token');
@@ -77,16 +89,14 @@ const StudentFormsPage = () => {
     }
   };
 
-  const makeAuthenticatedRequest = async (
-    url: string,
-    options?: RequestInit
-  ) => {
+  const makeAuthenticatedRequest = async (url: string, options?: RequestInit) => {
     try {
       const token = getToken();
-      const headers: HeadersInit = {
-        "Content-Type": "application/json",
-        ...options?.headers,
-      };
+      const headers: HeadersInit = { ...options?.headers };
+
+      if (!(options?.body instanceof FormData)) {
+        headers["Content-Type"] = "application/json";
+      }
 
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
@@ -99,7 +109,6 @@ const StudentFormsPage = () => {
       });
 
       if (response.status === 401) {
-        console.error('❌ Unauthorized (401)');
         setIsAuthenticated(false);
         throw new Error("Unauthorized: Please log in again");
       }
@@ -120,21 +129,20 @@ const StudentFormsPage = () => {
     const date = new Date(dateString);
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
 
     if (seconds < 0) {
       const absDays = Math.floor(-seconds / 86400);
       const absHours = Math.floor((-seconds % 86400) / 3600);
       const absMinutes = Math.floor((-seconds % 3600) / 60);
-      
       if (absDays > 0) return `in ${absDays}d`;
       if (absHours > 0) return `in ${absHours}h`;
       if (absMinutes > 0) return `in ${absMinutes}m`;
       return "soon";
     }
 
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
     if (days > 0) return `${days}d ago`;
     if (hours > 0) return `${hours}h ago`;
     if (minutes > 0) return `${minutes}m ago`;
@@ -145,26 +153,28 @@ const StudentFormsPage = () => {
     return new Date(dateString).toLocaleString();
   };
 
-  // Fetch forms list
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
   useEffect(() => {
     if (view !== "list" || !isAuthenticated) return;
 
     const fetchForms = async () => {
       setIsLoading(true);
       try {
-        const response = await makeAuthenticatedRequest(
-          `${API_BASE_URL}/registrations/forms?skip=0&limit=50`
-        );
+        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/registrations/forms?skip=0&limit=50`);
 
         if (response.ok) {
           const data = await response.json();
           const formsArray = Array.isArray(data) ? data : [];
-          
-          const sorted = formsArray.sort(
-            (a: Form, b: Form) =>
-              new Date(b.open_date).getTime() - new Date(a.open_date).getTime()
+          const sorted = formsArray.sort((a: Form, b: Form) => 
+            new Date(b.open_date).getTime() - new Date(a.open_date).getTime()
           );
-          
           setForms(sorted);
         } else if (response.status === 404) {
           setForms([]);
@@ -184,43 +194,28 @@ const StudentFormsPage = () => {
   const handleSelectForm = async (formId: number) => {
     setIsLoading(true);
     try {
-      const [formResponse, statusResponse, submissionResponse] =
-        await Promise.all([
-          makeAuthenticatedRequest(
-            `${API_BASE_URL}/registrations/forms/${formId}`
-          ),
-          makeAuthenticatedRequest(
-            `${API_BASE_URL}/registrations/forms/${formId}/status`
-          ),
-          makeAuthenticatedRequest(
-            `${API_BASE_URL}/registrations/forms/${formId}/submission`
-          ).catch(() => null),
-        ]);
+      const [formResponse, statusResponse, submissionResponse] = await Promise.all([
+        makeAuthenticatedRequest(`${API_BASE_URL}/registrations/forms/${formId}`),
+        makeAuthenticatedRequest(`${API_BASE_URL}/registrations/forms/${formId}/status`).catch(() => null),
+        makeAuthenticatedRequest(`${API_BASE_URL}/registrations/forms/${formId}/submission`).catch(() => null),
+      ]);
 
       if (formResponse.ok) {
         const form = await formResponse.json();
         setSelectedForm(form);
 
-        const initialData = form.fields.reduce(
-          (acc: any, field: Field) => ({
-            ...acc,
-            [field.id]: field.default_value || "",
-          }),
-          {}
-        );
+        const initialData = form.fields.reduce((acc: any, field: Field) => ({
+          ...acc,
+          [field.id]: field.default_value || "",
+        }), {});
 
         if (submissionResponse && submissionResponse.ok) {
           const submissionData = await submissionResponse.json();
           setSubmission(submissionData);
-          
-          const processedData = Object.entries(submissionData.data).reduce(
-            (acc, [key, value]) => ({
-              ...acc,
-              [isNaN(Number(key)) ? key : Number(key)]: value,
-            }),
-            {}
-          );
-          
+          const processedData = Object.entries(submissionData.data).reduce((acc, [key, value]) => ({
+            ...acc,
+            [isNaN(Number(key)) ? key : Number(key)]: value,
+          }), {});
           setFormData({ ...initialData, ...processedData });
         } else {
           setFormData(initialData);
@@ -230,7 +225,7 @@ const StudentFormsPage = () => {
         throw new Error("Failed to load form");
       }
 
-      if (statusResponse.ok) {
+      if (statusResponse && statusResponse.ok) {
         setFormStatus(await statusResponse.json());
       }
 
@@ -248,25 +243,49 @@ const StudentFormsPage = () => {
     if (selectedForm) {
       selectedForm.fields.forEach((field) => {
         const value = formData[field.id];
+        const files = fileData[field.id];
 
-        if (field.required && (value === "" || value === null || value === undefined)) {
-          newErrors[field.id] = `${field.label} is required`;
+        if (field.required) {
+          if (field.field_type === 'file_upload' || field.field_type === 'multi_file_upload') {
+            if (!files || files.length === 0) {
+              newErrors[field.id] = `${field.label} is required`;
+            }
+          } else if (value === "" || value === null || value === undefined) {
+            newErrors[field.id] = `${field.label} is required`;
+          }
         }
 
-        if (
-          field.field_type === "email" &&
-          value &&
-          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))
-        ) {
-          newErrors[field.id] = "Invalid email format";
-        }
+        if (value !== "" && value !== null && value !== undefined) {
+          if (field.field_type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
+            newErrors[field.id] = "Invalid email format";
+          }
 
-        if (
-          field.field_type === "number" &&
-          value &&
-          isNaN(Number(value))
-        ) {
-          newErrors[field.id] = "Must be a number";
+          if (field.field_type === "phone") {
+            const cleaned = String(value).replace(/\D/g, '');
+            if (cleaned.length < 7 || cleaned.length > 15) {
+              newErrors[field.id] = "Invalid phone number";
+            }
+          }
+
+          if (field.field_type === "number" && isNaN(Number(value))) {
+            newErrors[field.id] = "Must be a number";
+          }
+
+          if (field.min_length && String(value).length < field.min_length) {
+            newErrors[field.id] = `Minimum ${field.min_length} characters required`;
+          }
+
+          if (field.max_length && String(value).length > field.max_length) {
+            newErrors[field.id] = `Maximum ${field.max_length} characters allowed`;
+          }
+
+          if (field.min_value !== undefined && Number(value) < field.min_value) {
+            newErrors[field.id] = `Minimum value is ${field.min_value}`;
+          }
+
+          if (field.max_value !== undefined && Number(value) > field.max_value) {
+            newErrors[field.id] = `Maximum value is ${field.max_value}`;
+          }
         }
       });
     }
@@ -278,17 +297,34 @@ const StudentFormsPage = () => {
   const handleSave = useCallback(async () => {
     if (!selectedForm || submission?.locked) return;
 
+    if (!validateForm()) {
+      showToast("Please fix the errors below", "error");
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const processedData = Object.entries(formData).reduce(
-        (acc, [key, value]) => ({
-          ...acc,
-          [String(key)]: value,
-        }),
-        {}
-      );
+      const formDataToSend = new FormData();
 
-      const body = { data: processedData };
+      selectedForm.fields.forEach((field) => {
+        const value = formData[field.id];
+        const files = fileData[field.id];
+
+        if (field.field_type === 'file_upload' || field.field_type === 'multi_file_upload') {
+          if (files && files.length > 0) {
+            files.forEach(file => {
+              formDataToSend.append(String(field.id), file);
+            });
+          }
+        } else if (value !== undefined && value !== null && value !== "") {
+          if (Array.isArray(value)) {
+            formDataToSend.append(String(field.id), JSON.stringify(value));
+          } else {
+            formDataToSend.append(String(field.id), String(value));
+          }
+        }
+      });
+
       const url = submission
         ? `${API_BASE_URL}/registrations/forms/${selectedForm.id}/submission`
         : `${API_BASE_URL}/registrations/forms/${selectedForm.id}/submit`;
@@ -296,14 +332,23 @@ const StudentFormsPage = () => {
 
       const response = await makeAuthenticatedRequest(url, {
         method,
-        body: JSON.stringify(body),
+        body: formDataToSend,
       });
 
       if (response.ok) {
         const data = await response.json();
-        setSubmission(data);
+        if (data.submission_id || data.id) {
+          setSubmission({
+            id: data.submission_id || data.id,
+            form_id: selectedForm.id,
+            student_id: 0,
+            data: formData,
+            locked: false
+          });
+        }
         setLastSaved(new Date());
-        showToast("Progress saved successfully", "success");
+        setFileData({});
+        showToast(submission ? "Form updated successfully" : "Form submitted successfully", "success");
       } else {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.detail || `Failed to ${submission ? "update" : "submit"} form`;
@@ -314,43 +359,42 @@ const StudentFormsPage = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [selectedForm, formData, submission]);
+  }, [selectedForm, formData, fileData, submission]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-
-    if (!validateForm()) {
-      showToast("Please fix the errors below", "error");
-      return;
-    }
-
     handleSave();
   };
 
-  const handleDownload = async () => {
-    if (!submission || !selectedForm) return;
+  const handleFileChange = (fieldId: number, files: FileList | null, field: Field) => {
+    if (!files || files.length === 0) return;
 
-    try {
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/registrations/forms/${selectedForm.id}/submissions/export?format=pdf`,
-        { method: "GET" }
-      );
+    const fileArray = Array.from(files);
+    const config = field.file_upload_config || {};
+    const maxSize = config.max_size || 10 * 1024 * 1024;
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `submission_${submission.id}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast("PDF downloaded successfully", "success");
-      } else {
-        throw new Error("Failed to download submission");
+    for (const file of fileArray) {
+      if (file.size > maxSize) {
+        showToast(`File ${file.name} exceeds maximum size of ${formatFileSize(maxSize)}`, "error");
+        return;
       }
-    } catch (error) {
-      showToast((error as Error).message, "error");
     }
+
+    if (field.field_type === 'multi_file_upload') {
+      setFileData(prev => ({ ...prev, [fieldId]: fileArray }));
+    } else {
+      setFileData(prev => ({ ...prev, [fieldId]: [fileArray[0]] }));
+    }
+  };
+
+  const removeFile = (fieldId: number, index: number) => {
+    setFileData(prev => {
+      const files = prev[fieldId] || [];
+      return {
+        ...prev,
+        [fieldId]: files.filter((_, i) => i !== index)
+      };
+    });
   };
 
   const isFieldVisible = (field: Field): boolean => {
@@ -372,64 +416,88 @@ const StudentFormsPage = () => {
   const renderField = (field: Field) => {
     if (!isFieldVisible(field)) return null;
 
-    const disabledFields = ["name", "email", "registration", "college", "school"];
-    const isDisabled =
-      submission?.locked ||
-      disabledFields.some((keyword) =>
-        field.label.toLowerCase().includes(keyword)
-      );
+    const isDisabled = submission?.locked;
+    const value = formData[field.id];
+    const files = fileData[field.id] || [];
 
     const inputClass = `w-full px-4 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500 ${
       errors[field.id] ? "border-red-500" : "border-gray-300"
     }`;
 
-    const value = formData[field.id];
-
     const renderInput = () => {
       switch (field.field_type) {
+        case "short_text":
         case "text":
-        case "email":
           return (
             <input
               id={`field-${field.id}`}
-              type={field.field_type}
+              type="text"
               value={value || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, [field.id]: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              placeholder={field.placeholder}
               className={inputClass}
               disabled={isDisabled}
-              required={field.required}
+              minLength={field.min_length}
+              maxLength={field.max_length}
             />
           );
 
+        case "long_text":
         case "textarea":
           return (
             <textarea
               id={`field-${field.id}`}
               value={value || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, [field.id]: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              placeholder={field.placeholder}
               className={`${inputClass} resize-none`}
               rows={4}
               disabled={isDisabled}
-              required={field.required}
+              minLength={field.min_length}
+              maxLength={field.max_length}
+            />
+          );
+
+        case "email":
+          return (
+            <input
+              id={`field-${field.id}`}
+              type="email"
+              value={value || ""}
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              placeholder={field.placeholder || "email@example.com"}
+              className={inputClass}
+              disabled={isDisabled}
+            />
+          );
+
+        case "phone":
+          return (
+            <input
+              id={`field-${field.id}`}
+              type="tel"
+              value={value || ""}
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              placeholder={field.placeholder || "+254 700 000 000"}
+              className={inputClass}
+              disabled={isDisabled}
             />
           );
 
         case "number":
+        case "currency":
           return (
             <input
               id={`field-${field.id}`}
               type="number"
               value={value || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, [field.id]: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              placeholder={field.placeholder}
               className={inputClass}
               disabled={isDisabled}
-              required={field.required}
+              min={field.min_value}
+              max={field.max_value}
+              step={field.field_type === "currency" ? "0.01" : "any"}
             />
           );
 
@@ -439,12 +507,33 @@ const StudentFormsPage = () => {
               id={`field-${field.id}`}
               type="date"
               value={value || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, [field.id]: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
               className={inputClass}
               disabled={isDisabled}
-              required={field.required}
+            />
+          );
+
+        case "time":
+          return (
+            <input
+              id={`field-${field.id}`}
+              type="time"
+              value={value || ""}
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              className={inputClass}
+              disabled={isDisabled}
+            />
+          );
+
+        case "datetime":
+          return (
+            <input
+              id={`field-${field.id}`}
+              type="datetime-local"
+              value={value || ""}
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              className={inputClass}
+              disabled={isDisabled}
             />
           );
 
@@ -455,19 +544,11 @@ const StudentFormsPage = () => {
                 type="checkbox"
                 id={`field-${field.id}`}
                 checked={value === true || value === "true"}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    [field.id]: e.target.checked,
-                  })
-                }
-                disabled={submission?.locked}
+                onChange={(e) => setFormData({ ...formData, [field.id]: e.target.checked })}
+                disabled={isDisabled}
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
               />
-              <label
-                htmlFor={`field-${field.id}`}
-                className="text-sm font-medium text-gray-900"
-              >
+              <label htmlFor={`field-${field.id}`} className="text-sm font-medium text-gray-900">
                 {field.label}
                 {field.required && <span className="text-red-600 ml-1">*</span>}
               </label>
@@ -475,16 +556,14 @@ const StudentFormsPage = () => {
           );
 
         case "select":
+        case "radio":
           return (
             <select
               id={`field-${field.id}`}
               value={value || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, [field.id]: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
               className={inputClass}
               disabled={isDisabled}
-              required={field.required}
             >
               <option value="">Select an option</option>
               {field.options?.map((option) => (
@@ -495,26 +574,108 @@ const StudentFormsPage = () => {
             </select>
           );
 
+        case "multi_select":
+        case "checkbox":
+          return (
+            <div className="space-y-2">
+              {field.options?.map((option) => (
+                <label key={option} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={Array.isArray(value) && value.includes(option)}
+                    onChange={(e) => {
+                      const currentValues = Array.isArray(value) ? value : [];
+                      if (e.target.checked) {
+                        setFormData({ ...formData, [field.id]: [...currentValues, option] });
+                      } else {
+                        setFormData({ ...formData, [field.id]: currentValues.filter(v => v !== option) });
+                      }
+                    }}
+                    disabled={isDisabled}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                  />
+                  <span className="text-sm text-gray-700">{option}</span>
+                </label>
+              ))}
+            </div>
+          );
+
+        case "file_upload":
+        case "multi_file_upload":
+          const config = field.file_upload_config || {};
+          const maxSize = config.max_size || 10 * 1024 * 1024;
+          const allowedTypes = config.allowed_types || ['pdf', 'doc', 'image'];
+          
+          return (
+            <div className="space-y-3">
+              <div>
+                <input
+                  id={`field-${field.id}`}
+                  type="file"
+                  onChange={(e) => handleFileChange(field.id, e.target.files, field)}
+                  disabled={isDisabled}
+                  multiple={field.field_type === 'multi_file_upload'}
+                  className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Max size: {formatFileSize(maxSize)}. Allowed: {allowedTypes.join(', ')}
+                </p>
+              </div>
+              
+              {files.length > 0 && (
+                <div className="space-y-2">
+                  {files.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200">
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                        <span className="text-blue-600">📎</span>
+                        <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                        <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
+                      </div>
+                      {!isDisabled && (
+                        <button
+                          type="button"
+                          onClick={() => removeFile(field.id, index)}
+                          className="ml-2 text-red-600 hover:text-red-800"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+
         default:
-          return null;
+          return (
+            <input
+              id={`field-${field.id}`}
+              type="text"
+              value={value || ""}
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              className={inputClass}
+              disabled={isDisabled}
+            />
+          );
       }
     };
 
     return (
-      <div
-        key={field.id}
-        className={field.field_type === "boolean" ? "" : "space-y-2"}
-      >
+      <div key={field.id} className={field.field_type === "boolean" ? "" : "space-y-2"}>
         {field.field_type !== "boolean" && (
-          <label
-            htmlFor={`field-${field.id}`}
-            className="block text-sm font-medium text-gray-900"
-          >
+          <label htmlFor={`field-${field.id}`} className="block text-sm font-medium text-gray-900">
             {field.label}
             {field.required && <span className="text-red-600 ml-1">*</span>}
           </label>
         )}
+        {field.description && (
+          <p className="text-xs text-gray-600 mb-2">{field.description}</p>
+        )}
         {renderInput()}
+        {field.help_text && !errors[field.id] && (
+          <p className="text-xs text-gray-500">{field.help_text}</p>
+        )}
         {errors[field.id] && (
           <div className="flex items-center gap-1 text-sm text-red-600">
             <span>⚠️</span>
@@ -555,20 +716,13 @@ const StudentFormsPage = () => {
     return (
       <div className="max-w-4xl mx-auto px-4 py-6 lg:py-8">
         {toastMessage && (
-          <div
-            className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium ${
-              toastType === "success" ? "bg-green-600" : "bg-red-600"
-            }`}
-          >
+          <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium ${toastType === "success" ? "bg-green-600" : "bg-red-600"}`}>
             {toastMessage}
           </div>
         )}
 
         <div className="flex items-center gap-4 mb-8">
-          <button
-            onClick={() => setView("list")}
-            className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors"
-          >
+          <button onClick={() => setView("list")} className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors">
             <span className="text-2xl">←</span>
           </button>
           <div>
@@ -579,26 +733,12 @@ const StudentFormsPage = () => {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8">
           {formStatus && (
-            <div
-              className={`mb-6 p-4 rounded-lg border-l-4 ${
-                formStatus.is_locked
-                  ? "bg-red-50 border-red-400"
-                  : "bg-blue-50 border-blue-400"
-              }`}
-            >
+            <div className={`mb-6 p-4 rounded-lg border-l-4 ${formStatus.is_locked ? "bg-red-50 border-red-400" : "bg-blue-50 border-blue-400"}`}>
               <div className="flex items-start gap-3">
-                <span className="text-2xl mt-0.5">
-                  {formStatus.is_locked ? "🔒" : "⏰"}
-                </span>
+                <span className="text-2xl mt-0.5">{formStatus.is_locked ? "🔒" : "⏰"}</span>
                 <div className="flex-1">
-                  <p
-                    className={`font-medium ${
-                      formStatus.is_locked ? "text-red-800" : "text-blue-800"
-                    }`}
-                  >
-                    {formStatus.is_locked
-                      ? "Form is locked (deadline passed)"
-                      : `Deadline: ${formatDateTime(formStatus.deadline)}`}
+                  <p className={`font-medium ${formStatus.is_locked ? "text-red-800" : "text-blue-800"}`}>
+                    {formStatus.is_locked ? "Form is locked (deadline passed)" : `Deadline: ${formatDateTime(formStatus.deadline)}`}
                   </p>
                   {!formStatus.is_locked && (
                     <p className={`text-sm mt-1 ${formStatus.is_locked ? "text-red-700" : "text-blue-700"}`}>
@@ -620,40 +760,30 @@ const StudentFormsPage = () => {
             </div>
           )}
 
-          <div className="space-y-6">
-            {selectedForm.fields
-              .sort((a, b) => a.position - b.position)
-              .map(renderField)}
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              {selectedForm.fields.sort((a, b) => a.position - b.position).map(renderField)}
 
-            <div className="flex flex-wrap gap-4 pt-6 border-t border-gray-200">
-              <button
-                onClick={handleSubmit}
-                disabled={isSaving || !isFormOpen}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors"
-              >
-                ✓ {isSaving ? "Saving..." : submission ? "Update" : "Submit"}
-              </button>
+              <div className="flex flex-wrap gap-4 pt-6 border-t border-gray-200">
+                <button
+                  type="submit"
+                  disabled={isSaving || !isFormOpen}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors"
+                >
+                  ✓ {isSaving ? "Saving..." : submission ? "Update" : "Submit"}
+                </button>
 
-              {submission && (
                 <button
                   type="button"
-                  onClick={handleDownload}
-                  className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 hover:bg-gray-50 text-gray-900 font-medium rounded-lg transition-colors"
+                  onClick={() => setView("list")}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 hover:bg-gray-50 text-gray-900 font-medium rounded-lg transition-colors disabled:opacity-50"
                 >
-                  ⬇ Download PDF
+                  Cancel
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 hover:bg-gray-50 text-gray-900 font-medium rounded-lg transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
+              </div>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     );
@@ -662,11 +792,7 @@ const StudentFormsPage = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 lg:py-8">
       {toastMessage && (
-        <div
-          className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium ${
-            toastType === "success" ? "bg-green-600" : "bg-red-600"
-          }`}
-        >
+        <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium ${toastType === "success" ? "bg-green-600" : "bg-red-600"}`}>
           {toastMessage}
         </div>
       )}
