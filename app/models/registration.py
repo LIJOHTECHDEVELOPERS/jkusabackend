@@ -1,6 +1,7 @@
 """
-ENHANCED MODELS - Backward compatible with your existing code
-This adds advanced features while maintaining your current API
+FIXED MODELS - No reserved 'metadata' attribute
+Changed 'metadata' to 'form_metadata' to avoid SQLAlchemy conflicts
+Production-ready database schema
 """
 
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, JSON, ForeignKey, Enum as SQLEnum, Table, Index
@@ -14,10 +15,10 @@ class FormStatus(str, Enum):
     draft = "draft"
     open = "open"
     closed = "closed"
-    archived = "archived"  # NEW
+    archived = "archived"
 
 class FieldType(str, Enum):
-    # Basic types (your existing)
+    # Basic types
     text = "text"
     boolean = "boolean"
     number = "number"
@@ -26,11 +27,13 @@ class FieldType(str, Enum):
     textarea = "textarea"
     email = "email"
     
-    # ENHANCED TYPES
+    # Enhanced types
+    short_text = "short_text"
+    long_text = "long_text"
     phone = "phone"
     currency = "currency"
     time = "time"
-    datetime = "datetime"
+    datetime_type = "datetime"
     multi_select = "multi_select"
     radio = "radio"
     checkbox = "checkbox"
@@ -96,9 +99,9 @@ class Form(Base):
     enable_conditional_logic = Column(Boolean, default=True)
     collect_ip_address = Column(Boolean, default=False)
     randomize_field_order = Column(Boolean, default=False)
-    form_type = Column(String(50), default="registration")  # registration, survey, application
+    form_type = Column(String(50), default="registration")
     tags = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
+    form_metadata = Column(JSON, default=dict)  # FIXED: was 'metadata'
     
     # Relationships
     fields = relationship(
@@ -167,11 +170,6 @@ class FormField(Base):
     
     # File upload config
     file_upload_config = Column(JSON, nullable=True)
-    # {
-    #   "allowed_types": ["pdf", "doc", "image"],
-    #   "max_size": 10485760,
-    #   "accept_multiple": false
-    # }
     
     # UI configuration
     width_percentage = Column(Integer, default=100)
@@ -215,8 +213,6 @@ class FormCondition(Base):
     field_id = Column(Integer, ForeignKey('form_field.id', ondelete='CASCADE'), nullable=False)
     depends_on_field_id = Column(Integer, ForeignKey('form_field.id'), nullable=False)
     operator = Column(String(50), nullable=False)
-    # Operators: equals, not_equals, contains, greater_than, less_than, 
-    #            is_empty, is_not_empty, in_list, not_in_list
     value = Column(String(255), nullable=False)
     
     # ENHANCED FIELDS
@@ -298,8 +294,8 @@ class FormFieldUpload(Base):
     
     # File information
     original_filename = Column(String(500), nullable=False)
-    file_size = Column(Integer, nullable=False)  # bytes
-    file_type = Column(String(50), nullable=False)  # pdf, doc, image, etc
+    file_size = Column(Integer, nullable=False)
+    file_type = Column(String(50), nullable=False)
     content_type = Column(String(100), nullable=False)
     
     # S3 storage
@@ -309,7 +305,7 @@ class FormFieldUpload(Base):
     # Metadata
     upload_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     file_hash = Column(String(64), nullable=True)
-    virus_scan_status = Column(String(50), default="pending")  # pending, clean, infected
+    virus_scan_status = Column(String(50), default="pending")
     
     # Relationships
     submission = relationship("FormSubmission", back_populates="file_uploads")
@@ -329,7 +325,7 @@ class FormNotification(Base):
     # Notification settings
     notify_on_submission = Column(Boolean, default=True)
     notify_on_review = Column(Boolean, default=False)
-    notification_recipients = Column(JSON, default=list)  # [email1, email2]
+    notification_recipients = Column(JSON, default=list)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -345,13 +341,17 @@ class FormAuditLog(Base):
     form_id = Column(Integer, ForeignKey('form.id', ondelete='CASCADE'), nullable=False)
     admin_id = Column(Integer, ForeignKey('admins.id'), nullable=False)
     
-    action = Column(String(50), nullable=False)  # create, update, delete, publish, close
-    entity_type = Column(String(50), nullable=False)  # form, field, submission
+    action = Column(String(50), nullable=False)
+    entity_type = Column(String(50), nullable=False)
     entity_id = Column(Integer, nullable=True)
-    changes = Column(JSON, nullable=True)  # {field: {old: x, new: y}}
+    
+    changes = Column(JSON, nullable=True)
     
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     
     __table_args__ = (
         Index('idx_audit_form_timestamp', 'form_id', 'timestamp'),
     )
+    
+    # Relationships
+    form = relationship("Form", back_populates="audit_logs")

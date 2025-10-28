@@ -1,6 +1,7 @@
 """
-ENHANCED SCHEMAS - Backward compatible with your existing code
-All new fields are optional to maintain backward compatibility
+FIXED SCHEMAS - No reserved 'metadata' references
+Changed all 'metadata' to 'form_metadata' for consistency
+Production-ready validation layer
 """
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -10,7 +11,6 @@ from enum import Enum
 
 # ========== ENUMS ==========
 class FieldType(str, Enum):
-    # Your existing types
     TEXT = "text"
     BOOLEAN = "boolean"
     NUMBER = "number"
@@ -18,8 +18,8 @@ class FieldType(str, Enum):
     DATE = "date"
     TEXTAREA = "textarea"
     EMAIL = "email"
-    
-    # NEW TYPES
+    SHORT_TEXT = "short_text"
+    LONG_TEXT = "long_text"
     PHONE = "phone"
     CURRENCY = "currency"
     TIME = "time"
@@ -79,9 +79,9 @@ class FormFieldUploadResponse(BaseModel):
 class FormConditionCreate(BaseModel):
     """Create form condition"""
     depends_on_field_id: int
-    operator: str  # equals, not_equals, contains, greater_than, less_than, is_empty, is_not_empty
+    operator: str
     value: str
-    condition_type: Optional[str] = ConditionType.SHOW  # NEW: Optional for backward compatibility
+    condition_type: Optional[str] = ConditionType.SHOW
 
 class FormConditionResponse(BaseModel):
     """Form condition response"""
@@ -192,7 +192,7 @@ class FormCreate(BaseModel):
     randomize_field_order: Optional[bool] = False
     form_type: Optional[str] = "registration"
     tags: Optional[List[str]] = Field(default_factory=list)
-    metadata: Optional[Dict[str, Any]] = None
+    form_metadata: Optional[Dict[str, Any]] = None  # FIXED: was 'metadata'
     
     @field_validator('status', mode='before')
     @classmethod
@@ -223,6 +223,7 @@ class FormUpdate(BaseModel):
     enable_conditional_logic: Optional[bool] = None
     randomize_field_order: Optional[bool] = None
     tags: Optional[List[str]] = None
+    form_metadata: Optional[Dict[str, Any]] = None  # FIXED: was 'metadata'
     
     @field_validator('status', mode='before')
     @classmethod
@@ -257,7 +258,7 @@ class FormResponse(BaseModel):
     randomize_field_order: Optional[bool] = None
     form_type: Optional[str] = None
     tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    form_metadata: Optional[Dict[str, Any]] = None  # FIXED: was 'metadata'
 
 # ========== SUBMISSION SCHEMAS ==========
 class FormSubmissionCreate(BaseModel):
