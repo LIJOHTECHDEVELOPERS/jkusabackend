@@ -171,7 +171,7 @@ const StudentFormsPage = () => {
 
         if (response.ok) {
           const data = await response.json();
-          const formsArray = Array.isArray(data) ? data : [];
+          const formsArray = Array.isArray(data) ? data : THEM;
           const sorted = formsArray.sort((a: Form, b: Form) => 
             new Date(b.open_date).getTime() - new Date(a.open_date).getTime()
           );
@@ -313,37 +313,45 @@ const StudentFormsPage = () => {
     }
 
     setIsSaving(true);
-    try {
-      const formDataToSend = new FormData();
+    const formDataToSend = new FormData();
 
-      console.log("=== FORM SUBMISSION DEBUG ===");
-      
-      selectedForm.fields.forEach((field) => {
-        if (!isFieldVisible(field)) return;
+    console.log("=== FORM SUBMISSION DEBUG (Frontend) ===");
+    
+    selectedForm.fields.forEach((field) => {
+      if (!isFieldVisible(field)) return;
 
-        const value = formData[field.id];
-        const files = fileData[field.id];
+      const value = formData[field.id];
+      const files = fileData[field.id];
 
-        if (field.field_type === 'file_upload' || field.field_type === 'multi_file_upload') {
-          if (files && files.length > 0) {
-            files.forEach(file => {
-              formDataToSend.append(String(field.id), file);
-              console.log(`Field ${field.id} (${field.label}): FILE - ${file.name} (${file.size} bytes)`);
-            });
-          }
-        } else if (value !== undefined && value !== null && value !== "") {
-          if (Array.isArray(value)) {
-            formDataToSend.append(String(field.id), JSON.stringify(value));
-            console.log(`Field ${field.id} (${field.label}): ARRAY - ${JSON.stringify(value)}`);
-          } else {
-            formDataToSend.append(String(field.id), String(value));
-            console.log(`Field ${field.id} (${field.label}): ${String(value)}`);
-          }
+      if (field.field_type === 'file_upload' || field.field_type === 'multi_file_upload') {
+        if (files && files.length > 0) {
+          files.forEach(file => {
+            formDataToSend.append(String(field.id), file);
+            console.log(`Field ${field.id} (${field.label}): FILE - ${file.name} (${file.size} bytes)`);
+          });
         }
-      });
+      } else if (value !== undefined && value !== null && value !== "") {
+        if (Array.isArray(value)) {
+          formDataToSend.append(String(field.id), JSON.stringify(value));
+          console.log(`Field ${field.id} (${field.label}): ARRAY - ${JSON.stringify(value)}`);
+        } else {
+          formDataToSend.append(String(field.id), String(value));
+          console.log(`Field ${field.id} (${field.label}): ${String(value)}`);
+        }
+      }
+    });
 
-      console.log("=== END DEBUG ===");
+    console.log("=== FINAL FormData ENTRIES ===");
+    for (const [key, value] of formDataToSend.entries()) {
+      if (value instanceof File) {
+        console.log(`FormData: ${key} = [File] ${value.name} (${value.size} bytes)`);
+      } else {
+        console.log(`FormData: ${key} = ${value}`);
+      }
+    }
+    console.log("=== END DEBUG ===");
 
+    try {
       const url = submission
         ? `${API_BASE_URL}/registrations/forms/${selectedForm.id}/submission`
         : `${API_BASE_URL}/registrations/forms/${selectedForm.id}/submit`;
@@ -382,8 +390,8 @@ const StudentFormsPage = () => {
     }
   }, [selectedForm, formData, fileData, submission]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     handleSave();
   };
 
@@ -650,45 +658,45 @@ const StudentFormsPage = () => {
           const allowedTypes = config.allowed_types || ['pdf', 'doc', 'image'];
           
           return (
-            <div className="space-y-3">
-              <div>
-                <input
-                  id={`field-${field.id}`}
-                  type="file"
-                  onChange={(e) => handleFileChange(field.id, e.target.files, field)}
-                  disabled={isDisabled}
-                  multiple={field.field_type === 'multi_file_upload'}
-                  className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Max size: {formatFileSize(maxSize)}. Allowed: {allowedTypes.join(', ')}
-                </p>
-              </div>
-              
-              {files.length > 0 && (
-                <div className="space-y-2">
-                  {files.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200">
-                      <div className="flex items-center space-x-2 flex-1 min-w-0">
-                        <span className="text-blue-600">📎</span>
-                        <span className="text-sm text-gray-700 truncate">{file.name}</span>
-                        <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
-                      </div>
-                      {!isDisabled && (
-                        <button
-                          type="button"
-                          onClick={() => removeFile(field.id, index)}
-                          className="ml-2 text-red-600 hover:text-red-800"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className="space-y-3">
+            <div>
+              <input
+                id={`field-${field.id}`}
+                type="file"
+                onChange={(e) => handleFileChange(field.id, e.target.files, field)}
+                disabled={isDisabled}
+                multiple={field.field_type === 'multi_file_upload'}
+                className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white focus:outline-none"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Max size: {formatFileSize(maxSize)}. Allowed: {allowedTypes.join(', ')}
+              </p>
             </div>
-          );
+            
+            {files.length > 0 && (
+              <div className="space-y-2">
+                {files.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200">
+                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <span className="text-blue-600">Attachment</span>
+                      <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                      <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
+                    </div>
+                    {!isDisabled && (
+                      <button
+                        type="button"
+                        onClick={() => removeFile(field.id, index)}
+                        className="ml-2 text-red-600 hover:text-red-800"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
 
         case "url":
           return (
@@ -716,7 +724,7 @@ const StudentFormsPage = () => {
                     (value || 0) >= rating ? "text-yellow-400" : "text-gray-300"
                   } hover:text-yellow-400 transition-colors disabled:cursor-not-allowed`}
                 >
-                  ★
+                  Star
                 </button>
               ))}
             </div>
@@ -753,7 +761,7 @@ const StudentFormsPage = () => {
         )}
         {errors[field.id] && (
           <div className="flex items-center gap-1 text-sm text-red-600">
-            <span>⚠️</span>
+            <span>Warning</span>
             <span>{errors[field.id]}</span>
           </div>
         )}
@@ -800,7 +808,7 @@ const StudentFormsPage = () => {
 
         <div className="flex items-center gap-4 mb-8">
           <button onClick={() => setView("list")} className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors">
-            <span className="text-2xl">←</span>
+            <span className="text-2xl">Back</span>
           </button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{selectedForm.title}</h1>
@@ -812,7 +820,7 @@ const StudentFormsPage = () => {
           {formStatus && (
             <div className={`mb-6 p-4 rounded-lg border-l-4 ${formStatus.is_locked ? "bg-red-50 border-red-400" : "bg-blue-50 border-blue-400"}`}>
               <div className="flex items-start gap-3">
-                <span className="text-2xl mt-0.5">{formStatus.is_locked ? "🔒" : "⏰"}</span>
+                <span className="text-2xl mt-0.5">{formStatus.is_locked ? "Locked" : "Time"}</span>
                 <div className="flex-1">
                   <p className={`font-medium ${formStatus.is_locked ? "text-red-800" : "text-blue-800"}`}>
                     {formStatus.is_locked ? "Form is locked (deadline passed)" : `Deadline: ${formatDateTime(formStatus.deadline)}`}
@@ -847,7 +855,7 @@ const StudentFormsPage = () => {
                   disabled={isSaving || !isFormOpen}
                   className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors"
                 >
-                  ✓ {isSaving ? "Saving..." : submission ? "Update" : "Submit"}
+                  {isSaving ? "Saving..." : submission ? "Update" : "Submit"}
                 </button>
 
                 <button
@@ -885,7 +893,7 @@ const StudentFormsPage = () => {
         </div>
       ) : forms.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
-          <span className="text-5xl mb-4 block">📋</span>
+          <span className="text-5xl mb-4 block">Form</span>
           <p className="text-gray-600">No forms available at this time</p>
         </div>
       ) : (
@@ -924,11 +932,11 @@ const StudentFormsPage = () => {
 
                   <div className="space-y-2 mb-6">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span>📅</span>
+                      <span>Calendar</span>
                       <span>Opens: {formatDateTime(form.open_date)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span>⏱️</span>
+                      <span>Clock</span>
                       <span>Closes: {formatDateTime(form.close_date)}</span>
                     </div>
                   </div>
