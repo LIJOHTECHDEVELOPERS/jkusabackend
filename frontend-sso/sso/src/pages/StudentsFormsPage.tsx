@@ -194,15 +194,27 @@ const StudentFormsPage = () => {
   const handleSelectForm = async (formId: number) => {
     setIsLoading(true);
     try {
-      const [formResponse, statusResponse, submissionResponse] = await Promise.all([
+      const [formResponse, submissionResponse] = await Promise.all([
         makeAuthenticatedRequest(`${API_BASE_URL}/registrations/forms/${formId}`),
-        makeAuthenticatedRequest(`${API_BASE_URL}/registrations/forms/${formId}/status`).catch(() => null),
         makeAuthenticatedRequest(`${API_BASE_URL}/registrations/forms/${formId}/submission`).catch(() => null),
       ]);
 
       if (formResponse.ok) {
         const form = await formResponse.json();
         setSelectedForm(form);
+
+        const now = new Date();
+        const closeDate = new Date(form.close_date);
+        const isLocked = now > closeDate || form.status !== "open";
+
+        setFormStatus({
+          form_id: form.id,
+          form_status: form.status,
+          submission_status: submissionResponse && submissionResponse.ok ? "submitted" : "not_submitted",
+          is_locked: isLocked,
+          time_remaining_seconds: Math.max(0, Math.floor((closeDate.getTime() - now.getTime()) / 1000)),
+          deadline: form.close_date,
+        });
 
         const initialData = form.fields.reduce((acc: any, field: Field) => ({
           ...acc,
@@ -225,10 +237,6 @@ const StudentFormsPage = () => {
         throw new Error("Failed to load form");
       }
 
-      if (statusResponse && statusResponse.ok) {
-        setFormStatus(await statusResponse.json());
-      }
-
       setView("detail");
     } catch (error) {
       showToast((error as Error).message, "error");
@@ -242,6 +250,8 @@ const StudentFormsPage = () => {
 
     if (selectedForm) {
       selectedForm.fields.forEach((field) => {
+        if (!isFieldVisible(field)) return;
+
         const value = formData[field.id];
         const files = fileData[field.id];
 
@@ -306,7 +316,11 @@ const StudentFormsPage = () => {
     try {
       const formDataToSend = new FormData();
 
+      console.log("=== FORM SUBMISSION DEBUG ===");
+      
       selectedForm.fields.forEach((field) => {
+        if (!isFieldVisible(field)) return;
+
         const value = formData[field.id];
         const files = fileData[field.id];
 
@@ -314,16 +328,21 @@ const StudentFormsPage = () => {
           if (files && files.length > 0) {
             files.forEach(file => {
               formDataToSend.append(String(field.id), file);
+              console.log(`Field ${field.id} (${field.label}): FILE - ${file.name} (${file.size} bytes)`);
             });
           }
         } else if (value !== undefined && value !== null && value !== "") {
           if (Array.isArray(value)) {
             formDataToSend.append(String(field.id), JSON.stringify(value));
+            console.log(`Field ${field.id} (${field.label}): ARRAY - ${JSON.stringify(value)}`);
           } else {
             formDataToSend.append(String(field.id), String(value));
+            console.log(`Field ${field.id} (${field.label}): ${String(value)}`);
           }
         }
       });
+
+      console.log("=== END DEBUG ===");
 
       const url = submission
         ? `${API_BASE_URL}/registrations/forms/${selectedForm.id}/submission`
@@ -351,10 +370,12 @@ const StudentFormsPage = () => {
         showToast(submission ? "Form updated successfully" : "Form submitted successfully", "success");
       } else {
         const errorData = await response.json().catch(() => ({}));
+        console.error("Error response:", errorData);
         const errorMessage = errorData.detail || `Failed to ${submission ? "update" : "submit"} form`;
         throw new Error(errorMessage);
       }
     } catch (error) {
+      console.error("Submission error:", error);
       showToast((error as Error).message, "error");
     } finally {
       setIsSaving(false);
@@ -556,7 +577,6 @@ const StudentFormsPage = () => {
           );
 
         case "select":
-        case "radio":
           return (
             <select
               id={`field-${field.id}`}
@@ -574,12 +594,35 @@ const StudentFormsPage = () => {
             </select>
           );
 
+        case "radio":
+          return (
+            <div className="space-y-2">
+              {field.options?.map((option) => (
+                <label key={option} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                  <input
+                    type="radio"
+                    name={`field-${field.id}`}
+                    checked={value === option}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData({ ...formData, [field.id]: option });
+                      }
+                    }}
+                    disabled={isDisabled}
+                    className="w-4 h-4 text-blue-600 border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">{option}</span>
+                </label>
+              ))}
+            </div>
+          );
+
         case "multi_select":
         case "checkbox":
           return (
             <div className="space-y-2">
               {field.options?.map((option) => (
-                <label key={option} className="flex items-center space-x-2">
+                <label key={option} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
                   <input
                     type="checkbox"
                     checked={Array.isArray(value) && value.includes(option)}
@@ -647,6 +690,38 @@ const StudentFormsPage = () => {
             </div>
           );
 
+        case "url":
+          return (
+            <input
+              id={`field-${field.id}`}
+              type="url"
+              value={value || ""}
+              onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+              placeholder={field.placeholder || "https://example.com"}
+              className={inputClass}
+              disabled={isDisabled}
+            />
+          );
+
+        case "rating":
+          return (
+            <div className="flex items-center space-x-2">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  type="button"
+                  onClick={() => !isDisabled && setFormData({ ...formData, [field.id]: rating })}
+                  disabled={isDisabled}
+                  className={`text-2xl ${
+                    (value || 0) >= rating ? "text-yellow-400" : "text-gray-300"
+                  } hover:text-yellow-400 transition-colors disabled:cursor-not-allowed`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+          );
+
         default:
           return (
             <input
@@ -711,7 +786,9 @@ const StudentFormsPage = () => {
   }
 
   if (view === "detail" && selectedForm) {
-    const isFormOpen = formStatus && !formStatus.is_locked;
+    const now = new Date();
+    const closeDate = new Date(selectedForm.close_date);
+    const isFormOpen = now <= closeDate && selectedForm.status === "open" && (!submission || !submission.locked);
 
     return (
       <div className="max-w-4xl mx-auto px-4 py-6 lg:py-8">
@@ -741,7 +818,7 @@ const StudentFormsPage = () => {
                     {formStatus.is_locked ? "Form is locked (deadline passed)" : `Deadline: ${formatDateTime(formStatus.deadline)}`}
                   </p>
                   {!formStatus.is_locked && (
-                    <p className={`text-sm mt-1 ${formStatus.is_locked ? "text-red-700" : "text-blue-700"}`}>
+                    <p className={`text-sm mt-1 text-blue-700`}>
                       {formatDistanceToNow(formStatus.deadline)} remaining
                     </p>
                   )}

@@ -691,13 +691,6 @@ async def update_student_submission(
     db: Session = Depends(get_db),
     current_student: StudentModel = Depends(get_current_student)
 ):
-    """
-    Update an existing form submission
-    
-    Students can only edit before the form closes
-    Submissions are automatically locked after deadline
-    Can add/replace file uploads
-    """
     logger.debug(f"Student {current_student.email} updating form {form_id}")
     
     try:
@@ -715,89 +708,75 @@ async def update_student_submission(
         if not submission:
             raise HTTPException(status_code=404, detail="You have not submitted this form yet")
         
-        # Check if locked
         if submission.locked:
             raise HTTPException(status_code=403, detail="This submission is locked and cannot be edited")
         
-        # Check deadline
         current_time = datetime.utcnow()
         if current_time > db_form.close_date:
             submission.locked = True
             db.commit()
             raise HTTPException(status_code=403, detail="Submission deadline has passed")
         
-        # Parse form data
         form_data = await request.form()
-        submission_data = {}
+        logger.debug(f"Incoming form keys: {list(form_data.keys())}")  # Debug
+
+        # Only allow known field IDs
+        valid_field_ids = {str(f.id) for f in db_form.fields}
+        submission_data: Dict[str, Any] = {}
         start_time = datetime.utcnow()
-        
-        # Process each field
+
         for field in db_form.fields:
             field_id_str = str(field.id)
-            
-            # Handle file uploads
+            if field_id_str not in form_data:
+                if field.required and field_id_str not in submission.data:
+                    raise HTTPException(400, f"Required field missing: {field.label}")
+                submission_data[field_id_str] = submission.data.get(field_id_str)
+                continue
+
+            raw_value = form_data.get(field_id_str)
+
             if field.field_type in ['file_upload', 'multi_file_upload']:
                 files = form_data.getlist(field_id_str)
                 file_urls = []
-                
-                if files:
-                    # Delete old files if replacing
-                    for old_upload in submission.file_uploads:
-                        if old_upload.field_id == field.id:
-                            try:
-                                s3_service.delete_file(old_upload.s3_url)
-                            except Exception as e:
-                                logger.warning(f"Failed to delete old file: {str(e)}")
-                            db.delete(old_upload)
-                    
-                    # Upload new files
+
+                if files and any(f.filename for f in files if isinstance(f, UploadFile)):
+                    # Delete old files
+                    for old_upload in [u for u in submission.file_uploads if u.field_id == field.id]:
+                        try:
+                            s3_service.delete_file(old_upload.s3_key)
+                        except Exception as e:
+                            logger.warning(f"Failed to delete old file: {e}")
+                        db.delete(old_upload)
+
+                    # Upload new
                     for file in files:
-                        if file and isinstance(file, UploadFile):
-                            try:
-                                db_upload = await upload_form_file(
-                                    file, submission.id, field.id, field, db
-                                )
-                                file_urls.append(db_upload.s3_url)
-                            except HTTPException:
-                                raise
-                
-                # Store URLs
+                        if file and isinstance(file, UploadFile) and file.filename:
+                            db_upload = await upload_form_file(file, submission.id, field.id, field, db)
+                            file_urls.append(db_upload.s3_url)
+
                 if field.field_type == 'multi_file_upload':
-                    submission_data[field_id_str] = file_urls
+                    submission_data[field_id_str] = file_urls or submission.data.get(field_id_str, [])
                 else:
                     submission_data[field_id_str] = file_urls[0] if file_urls else submission.data.get(field_id_str)
-            
-            # Handle other field types
+
             else:
-                value = form_data.get(field_id_str)
-                if value:
-                    if not validate_field_value(field, value):
-                        raise HTTPException(400, f"Invalid value for field '{field.label}'")
-                    submission_data[field_id_str] = value
-                elif field.required:
-                    raise HTTPException(400, f"Required field missing: {field.label}")
-                else:
-                    # Keep existing value if not provided
-                    submission_data[field_id_str] = submission.data.get(field_id_str)
-        
-        # Calculate time to complete
+                if not validate_field_value(field, raw_value):
+                    raise HTTPException(400, f"Invalid value for field '{field.label}'")
+                submission_data[field_id_str] = raw_value
+
         end_time = datetime.utcnow()
         time_seconds = int((end_time - start_time).total_seconds())
-        
-        # Update submission
+
         submission.data = submission_data
         submission.last_edited_at = current_time
-        if submission.time_to_complete_seconds:
-            submission.time_to_complete_seconds += time_seconds
-        else:
-            submission.time_to_complete_seconds = time_seconds
-        
+        submission.time_to_complete_seconds = (submission.time_to_complete_seconds or 0) + time_seconds
+
         db.commit()
         db.refresh(submission)
-        
-        logger.info(f"Form {form_id} updated by student {current_student.email}")
+
+        logger.info(f"Form {form_id} updated successfully")
         return submission
-        
+
     except HTTPException:
         db.rollback()
         raise
